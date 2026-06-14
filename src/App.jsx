@@ -6,6 +6,7 @@ import {
   fetchCustomers, upsertCustomer, deleteCustomer as dbDeleteCustomer,
   fetchAppointments, upsertAppointment, deleteAppointment as dbDeleteAppointment,
 } from './lib/db'
+import { supabase } from './lib/supabase'
 import { useAuth } from './lib/AuthContext'
 import LoginPage from './components/LoginPage'
 
@@ -61,7 +62,7 @@ const NAV = [
   { id: 'staff', label: 'スタッフ管理', icon: '◑' },
 ]
 
-function Sidebar({ page, setPage, user, onSignOut }) {
+function Sidebar({ page, setPage, user, onSignOut, notifPerm, onRequestNotif }) {
   const [copied, setCopied] = useState(false)
 
   const copyBookingUrl = () => {
@@ -97,6 +98,23 @@ function Sidebar({ page, setPage, user, onSignOut }) {
         <div style={{ fontSize: '11px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {user?.email}
         </div>
+        {notifPerm === 'default' && (
+          <button
+            onClick={onRequestNotif}
+            style={{
+              background: 'none', border: '1px solid var(--border-light)',
+              color: 'var(--text-muted)', borderRadius: '6px',
+              padding: '5px 10px', fontSize: '11px', cursor: 'pointer', textAlign: 'left',
+            }}
+          >
+            予約通知を有効にする
+          </button>
+        )}
+        {notifPerm === 'granted' && (
+          <div style={{ fontSize: '11px', color: 'var(--success)', letterSpacing: '0.02em' }}>
+            ✓ 予約通知 有効
+          </div>
+        )}
         <button
           onClick={copyBookingUrl}
           style={{
@@ -120,6 +138,38 @@ function Sidebar({ page, setPage, user, onSignOut }) {
         </button>
       </div>
     </aside>
+  )
+}
+
+// ==================== TOAST ====================
+function Toast({ message, onClose }) {
+  useEffect(() => {
+    const t = setTimeout(onClose, 5000)
+    return () => clearTimeout(t)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div style={{
+      position: 'fixed', top: '20px', right: '20px', zIndex: 2000,
+      background: 'var(--bg-card)', border: '1px solid var(--gold)',
+      borderRadius: '12px', padding: '14px 16px',
+      boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+      display: 'flex', alignItems: 'flex-start', gap: '12px',
+      minWidth: '260px', maxWidth: '360px',
+      animation: 'slideIn 0.25s ease',
+    }}>
+      <span style={{ color: 'var(--gold)', fontSize: '16px', lineHeight: 1, marginTop: '1px', flexShrink: 0 }}>◆</span>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text)', marginBottom: '3px' }}>
+          新しい予約が入りました
+        </div>
+        <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>{message}</div>
+      </div>
+      <button onClick={onClose} style={{
+        background: 'none', border: 'none', color: 'var(--text-muted)',
+        cursor: 'pointer', fontSize: '14px', lineHeight: 1, padding: 0, flexShrink: 0,
+      }}>✕</button>
+    </div>
   )
 }
 
@@ -870,6 +920,16 @@ export default function App() {
   const [modal, setModal] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [toast, setToast] = useState(null)
+  const [notifPerm, setNotifPerm] = useState(
+    typeof Notification !== 'undefined' ? Notification.permission : 'denied'
+  )
+
+  const requestNotifPerm = async () => {
+    if (typeof Notification === 'undefined') return
+    const result = await Notification.requestPermission()
+    setNotifPerm(result)
+  }
 
   const loadAll = async () => {
     setLoading(true)
@@ -894,6 +954,37 @@ export default function App() {
 
   // session が変化したとき（ログイン時）にデータを読み込む
   useEffect(() => { if (session) loadAll() }, [session])
+
+  // Supabase Realtime: 新着予約をリアルタイム受信
+  useEffect(() => {
+    if (!session) return
+    const channel = supabase
+      .channel('appointments-inserts')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'appointments' },
+        payload => {
+          const r = payload.new
+          const appt = {
+            id: r.id, customerId: r.customer_id, staffId: r.staff_id,
+            menuId: r.menu_id, date: r.date, time: r.time,
+            duration: r.duration, notes: r.notes, status: r.status,
+          }
+          setAppointments(prev => prev.some(a => a.id === appt.id) ? prev : [...prev, appt])
+
+          const label = `${r.date} ${r.time}〜 の予約`
+          setToast(label)
+
+          if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+            new Notification('サロンつなぐ — 新着予約', {
+              body: `新しい予約が入りました（${label}）`,
+            })
+          }
+        }
+      )
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [session])
 
   // セッション未確定（初期ロード中）
   if (session === undefined) {
@@ -957,7 +1048,11 @@ export default function App() {
 
   return (
     <div className="app">
-      <Sidebar page={page} setPage={setPage} user={user} onSignOut={signOut} />
+      <Sidebar
+        page={page} setPage={setPage} user={user} onSignOut={signOut}
+        notifPerm={notifPerm} onRequestNotif={requestNotifPerm}
+      />
+      {toast && <Toast message={toast} onClose={() => setToast(null)} />}
       <main className="main-content">
         {loading ? (
           <LoadingScreen />

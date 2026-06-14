@@ -382,27 +382,43 @@ function ContactStep({ menu, selectedDate, selectedTime, onBack, onSubmit, submi
 }
 
 // ===== DONE =====
-function DoneStep({ menu, selectedDate, selectedTime, onReset }) {
+function DoneStep({ menu, selectedDate, selectedTime, bookingInfo, onReset }) {
   return (
     <div style={{ textAlign: 'center', padding: '8px 0' }}>
       <div style={s.doneIcon}>✓</div>
       <h2 style={s.doneTitle}>ご予約が完了しました</h2>
-      <p style={s.doneSub}>スタッフより確認のご連絡をいたします。</p>
+      <p style={s.doneSub}>
+        {bookingInfo?.name} 様のご予約を承りました。<br />
+        スタッフより確認のご連絡をいたします。
+      </p>
 
       <div style={{ ...s.summaryBox, textAlign: 'left', marginBottom: '28px' }}>
         <div style={s.summaryRow}>
+          <span style={s.summaryLabel}>お名前</span>
+          <span style={s.summaryValue}>{bookingInfo?.name} 様</span>
+        </div>
+        <div style={s.summaryRow}>
+          <span style={s.summaryLabel}>電話番号</span>
+          <span style={s.summaryValue}>{bookingInfo?.phone}</span>
+        </div>
+        <div style={s.summaryRow}>
           <span style={s.summaryLabel}>メニュー</span>
-          <span style={s.summaryValue}>{menu?.name}</span>
+          <span style={s.summaryValue}>{menu?.name}（{fmtPrice(menu?.price)} · {menu?.duration}分）</span>
         </div>
         <div style={s.summaryRow}>
           <span style={s.summaryLabel}>日時</span>
-          <span style={s.summaryValue}>{fmtDateLabel(selectedDate)}　{selectedTime}</span>
+          <span style={s.summaryValue}>{fmtDateLabel(selectedDate)}　{selectedTime}〜</span>
         </div>
         <div style={{ ...s.summaryRow, marginBottom: 0 }}>
           <span style={s.summaryLabel}>ステータス</span>
           <span style={{ ...s.summaryValue, color: 'var(--gold)' }}>仮予約（確認待ち）</span>
         </div>
       </div>
+
+      <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '20px', lineHeight: 1.7 }}>
+        ご登録いただいた電話番号にご連絡いたします。<br />
+        キャンセルの場合はお早めにお問い合わせください。
+      </p>
 
       <button style={s.btnSecondary} onClick={onReset}>別の予約をする</button>
     </div>
@@ -424,6 +440,7 @@ export default function BookingPage() {
   const [selectedTime, setSelectedTime] = useState(null)
   const [calDate, setCalDate] = useState(new Date())
   const [submitting, setSubmitting] = useState(false)
+  const [bookingInfo, setBookingInfo] = useState(null)
 
   useEffect(() => {
     Promise.all([fetchPublicMenus(), fetchPublicStaff()])
@@ -448,6 +465,7 @@ export default function BookingPage() {
         time: selectedTime,
         duration: selectedMenu.duration,
       })
+      setBookingInfo({ name, phone })
       setStep('done')
     } finally {
       setSubmitting(false)
@@ -460,6 +478,7 @@ export default function BookingPage() {
     setSelectedDate(null)
     setSelectedTime(null)
     setCalDate(new Date())
+    setBookingInfo(null)
   }
 
   if (loading) {
@@ -534,6 +553,7 @@ export default function BookingPage() {
               menu={selectedMenu}
               selectedDate={selectedDate}
               selectedTime={selectedTime}
+              bookingInfo={bookingInfo}
               onReset={reset}
             />
           )}
