@@ -16,13 +16,25 @@ function fmtPrice(n) {
 // ===== DB =====
 // public_id (UUID) で予約を取得し、内部 id (整数) も一緒に返す
 async function fetchBooking(publicId) {
-  const { data, error } = await supabase
+  const { data: appt, error: e1 } = await supabase
     .from('appointments')
-    .select('id, public_id, date, time, duration, status, notes, customers(name, phone, email), menus(name, price, duration), staff(name, color)')
+    .select('id, public_id, date, time, duration, status, notes, customer_id, menu_id, staff_id')
     .eq('public_id', publicId)
     .single()
-  if (error) throw error
-  return data
+  if (e1) { console.error('appointments error:', e1); throw e1 }
+
+  const [cr, mr, sr] = await Promise.all([
+    supabase.from('customers').select('name, phone, email').eq('id', appt.customer_id).single(),
+    supabase.from('menus').select('name, price, duration').eq('id', appt.menu_id).single(),
+    supabase.from('staff').select('name, color').eq('id', appt.staff_id).single(),
+  ])
+
+  return {
+    ...appt,
+    customers: cr.data,
+    menus: mr.data,
+    staff: sr.data,
+  }
 }
 
 async function cancelBooking(appointmentId) {
@@ -70,7 +82,7 @@ export default function BookingStatusPage() {
         setBooking(data)
         setStatus(data.status)
       })
-      .catch(e => setError(e.message))
+      .catch(e => { console.error('fetchBooking error:', e); setError(e.message) })
       .finally(() => setLoading(false))
   }, [publicId])
 

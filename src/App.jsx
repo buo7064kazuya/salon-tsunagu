@@ -526,15 +526,15 @@ function AppointmentsPage({ appointments, customers, menus, staff, openModal, on
                         <button
                           onClick={e => { e.stopPropagation(); copyBookingUrl(a.publicId) }}
                           style={{
-                            background: copiedId === a.id ? 'rgba(92,184,92,0.12)' : 'none',
-                            border: `1px solid ${copiedId === a.id ? 'rgba(92,184,92,0.4)' : 'var(--border-light)'}`,
-                            color: copiedId === a.id ? '#5CB85C' : 'var(--text-muted)',
+                            background: copiedId === a.publicId ? 'rgba(92,184,92,0.12)' : 'none',
+                            border: `1px solid ${copiedId === a.publicId ? 'rgba(92,184,92,0.4)' : 'var(--border-light)'}`,
+                            color: copiedId === a.publicId ? '#5CB85C' : 'var(--text-muted)',
                             borderRadius: '6px', padding: '4px 10px',
                             fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap',
                             transition: 'all 0.2s',
                           }}
                         >
-                          {copiedId === a.id ? '✓ コピー済み' : '確認URL'}
+                          {copiedId === a.publicId ? '✓ コピーしました' : '確認URLをコピー'}
                         </button>
                         <button className="btn-icon-sm" onClick={e => { e.stopPropagation(); openModal('appointment', a) }}>✎</button>
                       </div>

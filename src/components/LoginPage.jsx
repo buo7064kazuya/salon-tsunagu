@@ -1,16 +1,20 @@
 import { useState } from 'react'
 import { useAuth } from '../lib/AuthContext'
+import { supabase } from '../lib/supabase'
 import PrivacyPolicy from './PrivacyPolicy'
 
 export default function LoginPage() {
   const { signIn, signUp } = useAuth()
-  const [mode, setMode] = useState('login') // 'login' | 'signup'
+  const [mode, setMode] = useState('login') // 'login' | 'signup' | 'reset'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [signupDone, setSignupDone] = useState(false)
+  const [resetDone, setResetDone] = useState(false)
   const [showPrivacy, setShowPrivacy] = useState(false)
+
+  const switchMode = next => { setMode(next); setError(null) }
 
   const handleSubmit = async e => {
     e.preventDefault()
@@ -32,12 +36,37 @@ export default function LoginPage() {
     }
   }
 
+  const handleReset = async e => {
+    e.preventDefault()
+    setError(null)
+    setLoading(true)
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      })
+      if (error) throw error
+      setResetDone(true)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const Logo = () => (
+    <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+      <div style={styles.icon}>✦</div>
+      <h1 style={styles.logoName}>サロンつなぐ</h1>
+      <p style={styles.logoSub}>Salon Management</p>
+    </div>
+  )
+
+  // 新規登録完了
   if (signupDone) {
     return (
       <div style={styles.page}>
         <div style={styles.box}>
-          <div style={styles.icon}>✦</div>
-          <h1 style={styles.logoName}>サロンつなぐ</h1>
+          <Logo />
           <div style={styles.successBox}>
             <div style={{ fontSize: '28px', marginBottom: '12px' }}>✉</div>
             <p style={{ fontWeight: 600, marginBottom: '8px' }}>確認メールを送信しました</p>
@@ -45,7 +74,7 @@ export default function LoginPage() {
               {email} に届いたメールのリンクをクリックしてアカウントを有効化してください。
             </p>
           </div>
-          <button style={styles.linkBtn} onClick={() => { setSignupDone(false); setMode('login') }}>
+          <button style={styles.linkBtn} onClick={() => { setSignupDone(false); switchMode('login') }}>
             ログイン画面に戻る
           </button>
         </div>
@@ -53,20 +82,75 @@ export default function LoginPage() {
     )
   }
 
+  // パスワードリセットメール送信完了
+  if (resetDone) {
+    return (
+      <div style={styles.page}>
+        <div style={styles.box}>
+          <Logo />
+          <div style={styles.successBox}>
+            <div style={{ fontSize: '28px', marginBottom: '12px' }}>✉</div>
+            <p style={{ fontWeight: 600, marginBottom: '8px' }}>リセットメールを送信しました</p>
+            <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
+              {email} に届いたメールのリンクからパスワードを再設定してください。
+            </p>
+          </div>
+          <button style={styles.linkBtn} onClick={() => { setResetDone(false); switchMode('login') }}>
+            ログイン画面に戻る
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // パスワードリセット入力フォーム
+  if (mode === 'reset') {
+    return (
+      <div style={styles.page}>
+        <div style={styles.box}>
+          <Logo />
+          <h2 style={styles.title}>パスワードをリセット</h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '20px', lineHeight: 1.6 }}>
+            登録済みのメールアドレスを入力してください。パスワード再設定用のリンクを送信します。
+          </p>
+
+          {error && <div style={styles.errorBox}>{translateError(error)}</div>}
+
+          <form onSubmit={handleReset} style={styles.form}>
+            <div style={styles.field}>
+              <label style={styles.label}>メールアドレス</label>
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="example@salon.com"
+                required
+                className="input-field"
+                style={styles.input}
+              />
+            </div>
+            <button type="submit" className="btn-primary" disabled={loading} style={styles.submitBtn}>
+              {loading ? '送信中...' : 'リセットメールを送信'}
+            </button>
+          </form>
+
+          <div style={styles.switchRow}>
+            <button style={styles.linkBtn} onClick={() => switchMode('login')}>← ログイン画面に戻る</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ログイン / 新規登録フォーム
   return (
     <div style={styles.page}>
       <div style={styles.box}>
-        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <div style={styles.icon}>✦</div>
-          <h1 style={styles.logoName}>サロンつなぐ</h1>
-          <p style={styles.logoSub}>Salon Management</p>
-        </div>
+        <Logo />
 
         <h2 style={styles.title}>{mode === 'login' ? 'ログイン' : 'アカウント作成'}</h2>
 
-        {error && (
-          <div style={styles.errorBox}>{translateError(error)}</div>
-        )}
+        {error && <div style={styles.errorBox}>{translateError(error)}</div>}
 
         <form onSubmit={handleSubmit} style={styles.form}>
           <div style={styles.field}>
@@ -82,7 +166,20 @@ export default function LoginPage() {
             />
           </div>
           <div style={styles.field}>
-            <label style={styles.label}>パスワード{mode === 'signup' && <span style={{ color: 'var(--text-muted)', fontSize: '11px', marginLeft: '6px' }}>（6文字以上）</span>}</label>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+              <label style={styles.label}>
+                パスワード{mode === 'signup' && <span style={{ color: 'var(--text-muted)', fontSize: '11px', marginLeft: '6px' }}>（6文字以上）</span>}
+              </label>
+              {mode === 'login' && (
+                <button
+                  type="button"
+                  style={styles.forgotLink}
+                  onClick={() => switchMode('reset')}
+                >
+                  パスワードをお忘れの方
+                </button>
+              )}
+            </div>
             <input
               type="password"
               value={password}
@@ -108,12 +205,12 @@ export default function LoginPage() {
           {mode === 'login' ? (
             <>
               <span style={{ color: 'var(--text-muted)' }}>アカウントをお持ちでない方は</span>
-              <button style={styles.linkBtn} onClick={() => { setMode('signup'); setError(null) }}>新規登録</button>
+              <button style={styles.linkBtn} onClick={() => switchMode('signup')}>新規登録</button>
             </>
           ) : (
             <>
               <span style={{ color: 'var(--text-muted)' }}>すでにアカウントをお持ちの方は</span>
-              <button style={styles.linkBtn} onClick={() => { setMode('login'); setError(null) }}>ログイン</button>
+              <button style={styles.linkBtn} onClick={() => switchMode('login')}>ログイン</button>
             </>
           )}
         </div>
@@ -135,6 +232,8 @@ function translateError(msg) {
   if (msg.includes('Email not confirmed')) return 'メールアドレスの確認が完了していません。届いたメールのリンクをクリックしてください'
   if (msg.includes('User already registered')) return 'このメールアドレスはすでに登録されています'
   if (msg.includes('Password should be at least')) return 'パスワードは6文字以上で設定してください'
+  if (msg.includes('rate limit') || msg.includes('over_email_send_rate_limit')) return 'メール送信の上限に達しました。しばらく待ってから再試行してください'
+  if (msg.includes('For security purposes')) return 'セキュリティのため、しばらく待ってから再試行してください'
   return msg
 }
 
@@ -221,6 +320,16 @@ const styles = {
     cursor: 'pointer',
     padding: '0',
     textDecoration: 'underline',
+  },
+  forgotLink: {
+    background: 'none',
+    border: 'none',
+    color: 'var(--text-muted)',
+    fontSize: '11px',
+    cursor: 'pointer',
+    padding: '0',
+    textDecoration: 'underline',
+    letterSpacing: '0.02em',
   },
   errorBox: {
     background: 'rgba(224,92,92,0.12)',
