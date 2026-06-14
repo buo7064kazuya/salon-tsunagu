@@ -5,6 +5,7 @@ import {
   fetchMenus, upsertMenu, deleteMenu as dbDeleteMenu,
   fetchCustomers, upsertCustomer, deleteCustomer as dbDeleteCustomer,
   fetchAppointments, upsertAppointment, deleteAppointment as dbDeleteAppointment,
+  fetchBlockedDates, addBlockedDate, removeBlockedDate as dbRemoveBlockedDate,
 } from './lib/db'
 import { supabase } from './lib/supabase'
 import { useAuth } from './lib/AuthContext'
@@ -144,6 +145,7 @@ const NAV = [
   { id: 'customers', label: '顧客管理', icon: '◎' },
   { id: 'menus', label: 'メニュー管理', icon: '◐' },
   { id: 'staff', label: 'スタッフ管理', icon: '◑' },
+  { id: 'blocked', label: '休業日設定', icon: '◻' },
 ]
 
 function Sidebar({ page, setPage, user, onSignOut, notifPerm, onRequestNotif }) {
@@ -737,6 +739,101 @@ function MenusPage({ menus, openModal }) {
   )
 }
 
+// ==================== BLOCKED DATES PAGE ====================
+function BlockedDatesPage({ blockedDates, onAdd, onRemove }) {
+  const [date, setDate] = useState('')
+  const [reason, setReason] = useState('')
+  const [adding, setAdding] = useState(false)
+  const [addError, setAddError] = useState(null)
+
+  const handleAdd = async () => {
+    if (!date) return
+    setAdding(true)
+    setAddError(null)
+    try {
+      await onAdd(date, reason)
+      setDate('')
+      setReason('')
+    } catch (e) {
+      setAddError(e.message)
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  return (
+    <div className="page">
+      <div className="page-header">
+        <h1 className="page-title">休業日設定</h1>
+      </div>
+      <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '20px' }}>
+        設定した日付はお客様の予約ページで選択できなくなります。
+      </p>
+
+      <div className="card" style={{ marginBottom: '20px' }}>
+        <div className="card-header"><h2 className="card-title">休業日を追加</h2></div>
+        <div style={{ display: 'flex', gap: '10px', marginTop: '16px', flexWrap: 'wrap' }}>
+          <input
+            type="date"
+            className="input-field"
+            value={date}
+            min={TODAY}
+            onChange={e => setDate(e.target.value)}
+            style={{ width: 'auto' }}
+          />
+          <input
+            className="input-field"
+            value={reason}
+            onChange={e => setReason(e.target.value)}
+            placeholder="理由（例: 定休日、研修など）任意"
+            style={{ flex: 1, minWidth: '180px' }}
+          />
+          <button
+            className="btn-primary"
+            disabled={!date || adding}
+            onClick={handleAdd}
+          >
+            {adding ? '追加中...' : '追加する'}
+          </button>
+        </div>
+        {addError && (
+          <div style={{ color: 'var(--danger)', fontSize: '12px', marginTop: '8px' }}>{addError}</div>
+        )}
+      </div>
+
+      <div className="card">
+        <div className="card-header"><h2 className="card-title">設定済みの休業日</h2></div>
+        {blockedDates.length === 0 ? (
+          <p className="empty-state">設定された休業日はありません</p>
+        ) : (
+          <table className="data-table">
+            <thead>
+              <tr><th>日付</th><th>理由</th><th /></tr>
+            </thead>
+            <tbody>
+              {blockedDates.map(b => (
+                <tr key={b.id} className="table-row">
+                  <td style={{ fontWeight: 600 }}>{fmtDate(b.date)}</td>
+                  <td style={{ color: 'var(--text-muted)', fontSize: '13px' }}>{b.reason || '-'}</td>
+                  <td style={{ textAlign: 'right' }}>
+                    <button
+                      className="btn-icon-sm"
+                      style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}
+                      onClick={() => { if (window.confirm('この休業日を削除しますか？')) onRemove(b.id) }}
+                    >
+                      削除
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ==================== STAFF PAGE ====================
 function StaffPage({ staff, appointments, openModal }) {
   return (
@@ -1085,6 +1182,7 @@ export default function App() {
   const [customers, setCustomers] = useState([])
   const [menus, setMenus] = useState([])
   const [staff, setStaff] = useState([])
+  const [blockedDates, setBlockedDates] = useState([])
   const [calendarDate, setCalendarDate] = useState(new Date())
   const [calendarView, setCalendarView] = useState('month')
   const [modal, setModal] = useState(null)
@@ -1105,16 +1203,18 @@ export default function App() {
     setLoading(true)
     setError(null)
     try {
-      const [s, m, c, a] = await Promise.all([
+      const [s, m, c, a, bd] = await Promise.all([
         fetchStaff(),
         fetchMenus(),
         fetchCustomers(),
         fetchAppointments(),
+        fetchBlockedDates(),
       ])
       setStaff(s)
       setMenus(m)
       setCustomers(c)
       setAppointments(a)
+      setBlockedDates(bd)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -1218,6 +1318,15 @@ export default function App() {
     setModal(null)
   }
 
+  const handleAddBlocked = async (date, reason) => {
+    const saved = await addBlockedDate(date, reason)
+    setBlockedDates(p => [...p, saved].sort((a, b) => a.date.localeCompare(b.date)))
+  }
+  const handleRemoveBlocked = async id => {
+    await dbRemoveBlockedDate(id)
+    setBlockedDates(p => p.filter(b => b.id !== id))
+  }
+
   const shared = { appointments, customers, menus, staff, openModal }
 
   return (
@@ -1245,6 +1354,7 @@ export default function App() {
             {page === 'customers' && <CustomersPage customers={customers} openModal={openModal} />}
             {page === 'menus' && <MenusPage menus={menus} openModal={openModal} />}
             {page === 'staff' && <StaffPage staff={staff} appointments={appointments} openModal={openModal} />}
+            {page === 'blocked' && <BlockedDatesPage blockedDates={blockedDates} onAdd={handleAddBlocked} onRemove={handleRemoveBlocked} />}
           </>
         )}
       </main>

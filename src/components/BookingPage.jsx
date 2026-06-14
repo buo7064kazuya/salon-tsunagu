@@ -190,15 +190,40 @@ function MenuStep({ menus, selected, onSelect, onNext }) {
 }
 
 // ===== STEP 2: DATE + TIME =====
-function DateTimeStep({ menu, staff, selectedDate, setSelectedDate, selectedTime, setSelectedTime, calDate, setCalDate, onBack, onNext }) {
+function DateTimeStep({ menu, staff, salonId, selectedDate, setSelectedDate, selectedTime, setSelectedTime, calDate, setCalDate, onBack, onNext }) {
   const [appointments, setAppointments] = useState([])
+  const [blockedDates, setBlockedDates] = useState([])
   const [loadingSlots, setLoadingSlots] = useState(false)
   const TODAY = getTodayStr()
+
+  // 2ヶ月先の最大日付
+  const maxDateStr = useMemo(() => {
+    const d = new Date()
+    d.setMonth(d.getMonth() + 2)
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  }, [])
+
   const y = calDate.getFullYear()
   const mo = calDate.getMonth()
   const days = getDaysInMonth(y, mo)
   const firstDOW = getFirstDOW(y, mo)
   const cells = [...Array(firstDOW).fill(null), ...Array.from({ length: days }, (_, i) => i + 1)]
+
+  // 次月ボタンの無効化判定
+  const canGoNext = new Date(y, mo + 1, 1) <= new Date(maxDateStr)
+
+  // 現在時刻（分）— 当日の過去スロット判定用
+  const nowMins = useMemo(() => {
+    const n = new Date()
+    return n.getHours() * 60 + n.getMinutes()
+  }, [])
+
+  // 休業日を取得
+  useEffect(() => {
+    if (!salonId) return
+    supabase.from('blocked_dates').select('date').eq('salon_id', salonId)
+      .then(({ data }) => setBlockedDates((data || []).map(r => r.date)))
+  }, [salonId])
 
   useEffect(() => {
     if (!selectedDate) return
@@ -216,10 +241,15 @@ function DateTimeStep({ menu, staff, selectedDate, setSelectedDate, selectedTime
   const availMap = useMemo(() => {
     const map = {}
     slots.forEach(slot => {
+      // 当日の現在時刻以前のスロットはブロック
+      if (selectedDate === TODAY && timeToMins(slot) <= nowMins) {
+        map[slot] = []
+        return
+      }
       map[slot] = getAvailableStaffIds(slot, menu.duration, appointments, staffIds)
     })
     return map
-  }, [slots, menu.duration, appointments, staffIds])
+  }, [slots, menu.duration, appointments, staffIds, selectedDate, nowMins])
 
   return (
     <>
@@ -230,7 +260,11 @@ function DateTimeStep({ menu, staff, selectedDate, setSelectedDate, selectedTime
         <div style={s.calNav}>
           <button style={s.iconBtn} onClick={() => setCalDate(new Date(y, mo - 1, 1))}>‹</button>
           <span style={s.calNavTitle}>{y}年 {MONTHS_JP[mo]}</span>
-          <button style={s.iconBtn} onClick={() => setCalDate(new Date(y, mo + 1, 1))}>›</button>
+          <button
+            style={{ ...s.iconBtn, ...(!canGoNext ? { opacity: 0.3, cursor: 'not-allowed' } : {}) }}
+            disabled={!canGoNext}
+            onClick={() => canGoNext && setCalDate(new Date(y, mo + 1, 1))}
+          >›</button>
         </div>
         <div style={s.dowRow}>
           {DAYS_JP.map((d, i) => (
@@ -243,32 +277,39 @@ function DateTimeStep({ menu, staff, selectedDate, setSelectedDate, selectedTime
           {cells.map((day, i) => {
             if (!day) return <div key={`e${i}`} />
             const ds = `${y}-${pad(mo + 1)}-${pad(day)}`
-            const past = ds < TODAY
+            const isPast    = ds < TODAY
+            const isFuture  = ds > maxDateStr
+            const isBlocked = blockedDates.includes(ds)
+            const disabled  = isPast || isFuture || isBlocked
             const isSelected = ds === selectedDate
             const isToday = ds === TODAY
             const dow = (firstDOW + day - 1) % 7
             return (
               <button
                 key={day}
-                disabled={past}
+                disabled={disabled}
                 style={{
                   ...s.calDay,
-                  ...(past ? s.calDayPast : {}),
+                  ...(disabled ? s.calDayPast : {}),
+                  ...(isBlocked && !isSelected ? { color: '#E05C5C', opacity: 0.5 } : {}),
                   ...(isToday && !isSelected ? s.calDayToday : {}),
                   ...(isSelected ? s.calDaySelected : {}),
                   color: isSelected
                     ? '#0F0E0D'
-                    : past ? 'var(--border)'
+                    : disabled ? 'var(--border)'
                     : dow === 0 ? '#E05C5C'
                     : dow === 6 ? '#5C8BCC'
                     : 'var(--text)',
                 }}
-                onClick={() => setSelectedDate(ds)}
+                onClick={() => !disabled && setSelectedDate(ds)}
               >
                 {day}
               </button>
             )
           })}
+        </div>
+        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '10px', textAlign: 'right' }}>
+          ※ 予約は本日から2ヶ月先まで受け付けています
         </div>
       </div>
 
@@ -535,7 +576,7 @@ function DoneStep({ menu, selectedDate, selectedTime, bookingInfo, apptId, apptP
 
 // ===== ROOT =====
 export default function BookingPage() {
-  useParams() // salonId は将来のマルチサロン対応時に使用
+  const { salonId } = useParams()
 
   const [step, setStep] = useState('menu')
   const [menus, setMenus] = useState([])
@@ -642,6 +683,7 @@ export default function BookingPage() {
             <DateTimeStep
               menu={selectedMenu}
               staff={staff}
+              salonId={salonId}
               selectedDate={selectedDate}
               setSelectedDate={setSelectedDate}
               selectedTime={selectedTime}

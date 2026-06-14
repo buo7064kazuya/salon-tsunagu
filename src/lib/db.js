@@ -131,3 +131,21 @@ export async function deleteAppointment(id) {
   const { error } = await supabase.from('appointments').delete().eq('id', id)
   if (error) throw error
 }
+
+export async function fetchBlockedDates() {
+  const { data, error } = await supabase.from('blocked_dates').select('*').order('date')
+  if (error) throw error
+  return data
+}
+
+export async function addBlockedDate(date, reason = '') {
+  const { data, error } = await supabase
+    .from('blocked_dates').insert({ date, reason: reason || null }).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function removeBlockedDate(id) {
+  const { error } = await supabase.from('blocked_dates').delete().eq('id', id)
+  if (error) throw error
+}
