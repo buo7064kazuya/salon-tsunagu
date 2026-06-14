@@ -1,43 +1,19 @@
-import { useState, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import './App.css'
+import {
+  fetchStaff, upsertStaff, deleteStaff as dbDeleteStaff,
+  fetchMenus, upsertMenu, deleteMenu as dbDeleteMenu,
+  fetchCustomers, upsertCustomer, deleteCustomer as dbDeleteCustomer,
+  fetchAppointments, upsertAppointment, deleteAppointment as dbDeleteAppointment,
+} from './lib/db'
 
-// ==================== INITIAL DATA ====================
-const INITIAL_STAFF = [
-  { id: 1, name: '田中 花子', role: 'シニアスタイリスト', color: '#C9A96E' },
-  { id: 2, name: '鈴木 美咲', role: 'スタイリスト', color: '#8B6F9E' },
-  { id: 3, name: '佐藤 優子', role: 'アシスタント', color: '#5CA89E' },
-]
-
-const INITIAL_MENUS = [
-  { id: 1, name: 'カット', price: 5500, duration: 60, category: 'カット' },
-  { id: 2, name: 'カラー', price: 8800, duration: 90, category: 'カラー' },
-  { id: 3, name: 'パーマ', price: 11000, duration: 120, category: 'パーマ' },
-  { id: 4, name: 'トリートメント', price: 3300, duration: 30, category: 'ケア' },
-  { id: 5, name: 'ヘッドスパ', price: 4400, duration: 45, category: 'ケア' },
-  { id: 6, name: 'カット+カラー', price: 13200, duration: 150, category: 'セット' },
-]
-
-const INITIAL_CUSTOMERS = [
-  { id: 1, name: '山田 太郎', phone: '090-1234-5678', email: 'yamada@example.com', notes: 'アレルギーあり', visitCount: 5 },
-  { id: 2, name: '伊藤 花子', phone: '080-2345-6789', email: 'ito@example.com', notes: '', visitCount: 12 },
-  { id: 3, name: '佐々木 健太', phone: '070-3456-7890', email: 'sasaki@example.com', notes: 'ショートカット希望', visitCount: 3 },
-  { id: 4, name: '中村 恵子', phone: '090-4567-8901', email: 'nakamura@example.com', notes: '', visitCount: 8 },
-]
-
+// ==================== HELPERS ====================
 function getTodayStr() {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 const TODAY = getTodayStr()
-const INITIAL_APPOINTMENTS = [
-  { id: 1, customerId: 1, staffId: 1, menuId: 1, date: TODAY, time: '10:00', duration: 60, notes: '', status: 'confirmed' },
-  { id: 2, customerId: 2, staffId: 2, menuId: 2, date: TODAY, time: '11:00', duration: 90, notes: '', status: 'confirmed' },
-  { id: 3, customerId: 3, staffId: 1, menuId: 3, date: TODAY, time: '13:00', duration: 120, notes: '初回来店', status: 'confirmed' },
-  { id: 4, customerId: 4, staffId: 3, menuId: 5, date: TODAY, time: '14:00', duration: 45, notes: '', status: 'pending' },
-]
-
-// ==================== HELPERS ====================
 const pad = n => String(n).padStart(2, '0')
 const fmtPrice = n => `¥${Number(n).toLocaleString()}`
 const fmtDate = str => {
@@ -107,6 +83,25 @@ function Sidebar({ page, setPage }) {
       </nav>
       <div className="sidebar-footer">© 2024 サロンつなぐ</div>
     </aside>
+  )
+}
+
+// ==================== LOADING / ERROR ====================
+function LoadingScreen() {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#C9A96E', fontSize: '1.1rem' }}>
+      読み込み中...
+    </div>
+  )
+}
+
+function ErrorScreen({ message, onRetry }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '1rem' }}>
+      <div style={{ color: '#E05C5C', fontSize: '1rem' }}>データの読み込みに失敗しました</div>
+      <div style={{ color: '#888', fontSize: '0.85rem' }}>{message}</div>
+      <button className="btn-primary" onClick={onRetry}>再試行</button>
+    </div>
   )
 }
 
@@ -587,6 +582,7 @@ function AppointmentForm({ data, appointments, customers, menus, staff, onSave, 
     notes: data?.notes ?? '',
     status: data?.status ?? 'confirmed',
   })
+  const [saving, setSaving] = useState(false)
 
   const update = (key, val) => {
     setForm(prev => {
@@ -601,9 +597,11 @@ function AppointmentForm({ data, appointments, customers, menus, staff, onSave, 
 
   const dupWarn = checkDuplicate(appointments, { ...form, staffId: Number(form.staffId), duration: Number(form.duration) }, isEdit ? form.id : null)
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.customerId || !form.staffId || !form.menuId || !form.date || !form.time) return
-    onSave({ ...form, customerId: Number(form.customerId), staffId: Number(form.staffId), menuId: Number(form.menuId), duration: Number(form.duration) })
+    setSaving(true)
+    await onSave({ ...form, customerId: Number(form.customerId), staffId: Number(form.staffId), menuId: Number(form.menuId), duration: Number(form.duration) })
+    setSaving(false)
   }
 
   return (
@@ -655,10 +653,10 @@ function AppointmentForm({ data, appointments, customers, menus, staff, onSave, 
         </div>
       </div>
       <div className="modal-footer">
-        {isEdit && <button className="btn-danger" onClick={() => { if (window.confirm('この予約を削除しますか？')) onDelete(form.id) }}>削除</button>}
+        {isEdit && <button className="btn-danger" disabled={saving} onClick={() => { if (window.confirm('この予約を削除しますか？')) onDelete(form.id) }}>削除</button>}
         <div style={{ flex: 1 }} />
         <button className="btn-secondary" onClick={onClose}>キャンセル</button>
-        <button className="btn-primary" onClick={handleSave}>{isEdit ? '更新する' : '予約する'}</button>
+        <button className="btn-primary" disabled={saving} onClick={handleSave}>{saving ? '保存中...' : isEdit ? '更新する' : '予約する'}</button>
       </div>
     </>
   )
@@ -675,7 +673,15 @@ function CustomerForm({ data, onSave, onDelete, onClose }) {
     notes: data?.notes ?? '',
     visitCount: data?.visitCount ?? 0,
   })
+  const [saving, setSaving] = useState(false)
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  const handleSave = async () => {
+    if (!form.name) return
+    setSaving(true)
+    await onSave(form)
+    setSaving(false)
+  }
 
   return (
     <>
@@ -699,10 +705,10 @@ function CustomerForm({ data, onSave, onDelete, onClose }) {
         </div>
       </div>
       <div className="modal-footer">
-        {isEdit && <button className="btn-danger" onClick={() => { if (window.confirm('この顧客を削除しますか？')) onDelete(form.id) }}>削除</button>}
+        {isEdit && <button className="btn-danger" disabled={saving} onClick={() => { if (window.confirm('この顧客を削除しますか？')) onDelete(form.id) }}>削除</button>}
         <div style={{ flex: 1 }} />
         <button className="btn-secondary" onClick={onClose}>キャンセル</button>
-        <button className="btn-primary" onClick={() => form.name && onSave(form)}>{isEdit ? '更新する' : '追加する'}</button>
+        <button className="btn-primary" disabled={saving} onClick={handleSave}>{saving ? '保存中...' : isEdit ? '更新する' : '追加する'}</button>
       </div>
     </>
   )
@@ -718,7 +724,15 @@ function MenuForm({ data, onSave, onDelete, onClose }) {
     duration: data?.duration ?? 60,
     category: data?.category ?? 'カット',
   })
+  const [saving, setSaving] = useState(false)
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  const handleSave = async () => {
+    if (!form.name) return
+    setSaving(true)
+    await onSave(form)
+    setSaving(false)
+  }
 
   return (
     <>
@@ -742,10 +756,10 @@ function MenuForm({ data, onSave, onDelete, onClose }) {
         </div>
       </div>
       <div className="modal-footer">
-        {isEdit && <button className="btn-danger" onClick={() => { if (window.confirm('このメニューを削除しますか？')) onDelete(form.id) }}>削除</button>}
+        {isEdit && <button className="btn-danger" disabled={saving} onClick={() => { if (window.confirm('このメニューを削除しますか？')) onDelete(form.id) }}>削除</button>}
         <div style={{ flex: 1 }} />
         <button className="btn-secondary" onClick={onClose}>キャンセル</button>
-        <button className="btn-primary" onClick={() => form.name && onSave(form)}>{isEdit ? '更新する' : '追加する'}</button>
+        <button className="btn-primary" disabled={saving} onClick={handleSave}>{saving ? '保存中...' : isEdit ? '更新する' : '追加する'}</button>
       </div>
     </>
   )
@@ -762,7 +776,15 @@ function StaffForm({ data, onSave, onDelete, onClose }) {
     role: data?.role ?? '',
     color: data?.color ?? '#C9A96E',
   })
+  const [saving, setSaving] = useState(false)
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  const handleSave = async () => {
+    if (!form.name) return
+    setSaving(true)
+    await onSave(form)
+    setSaving(false)
+  }
 
   return (
     <>
@@ -789,10 +811,10 @@ function StaffForm({ data, onSave, onDelete, onClose }) {
         </div>
       </div>
       <div className="modal-footer">
-        {isEdit && <button className="btn-danger" onClick={() => { if (window.confirm('このスタッフを削除しますか？')) onDelete(form.id) }}>削除</button>}
+        {isEdit && <button className="btn-danger" disabled={saving} onClick={() => { if (window.confirm('このスタッフを削除しますか？')) onDelete(form.id) }}>削除</button>}
         <div style={{ flex: 1 }} />
         <button className="btn-secondary" onClick={onClose}>キャンセル</button>
-        <button className="btn-primary" onClick={() => form.name && onSave(form)}>{isEdit ? '更新する' : '追加する'}</button>
+        <button className="btn-primary" disabled={saving} onClick={handleSave}>{saving ? '保存中...' : isEdit ? '更新する' : '追加する'}</button>
       </div>
     </>
   )
@@ -801,45 +823,84 @@ function StaffForm({ data, onSave, onDelete, onClose }) {
 // ==================== ROOT APP ====================
 export default function App() {
   const [page, setPage] = useState('dashboard')
-  const [appointments, setAppointments] = useState(INITIAL_APPOINTMENTS)
-  const [customers, setCustomers] = useState(INITIAL_CUSTOMERS)
-  const [menus, setMenus] = useState(INITIAL_MENUS)
-  const [staff, setStaff] = useState(INITIAL_STAFF)
+  const [appointments, setAppointments] = useState([])
+  const [customers, setCustomers] = useState([])
+  const [menus, setMenus] = useState([])
+  const [staff, setStaff] = useState([])
   const [calendarDate, setCalendarDate] = useState(new Date())
   const [calendarView, setCalendarView] = useState('month')
   const [modal, setModal] = useState(null)
-  const idRef = useRef(500)
-  const newId = () => ++idRef.current
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  const loadAll = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const [s, m, c, a] = await Promise.all([
+        fetchStaff(),
+        fetchMenus(),
+        fetchCustomers(),
+        fetchAppointments(),
+      ])
+      setStaff(s)
+      setMenus(m)
+      setCustomers(c)
+      setAppointments(a)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { loadAll() }, [])
 
   const openModal = (type, data = null) => setModal({ type, data })
 
-  const saveAppointment = a => {
-    if (a.id) setAppointments(p => p.map(x => x.id === a.id ? a : x))
-    else setAppointments(p => [...p, { ...a, id: newId() }])
+  const saveAppointment = async a => {
+    const saved = await upsertAppointment(a)
+    setAppointments(p => a.id ? p.map(x => x.id === saved.id ? saved : x) : [...p, saved])
     setModal(null)
   }
-  const deleteAppointment = id => { setAppointments(p => p.filter(a => a.id !== id)); setModal(null) }
+  const handleDeleteAppointment = async id => {
+    await dbDeleteAppointment(id)
+    setAppointments(p => p.filter(a => a.id !== id))
+    setModal(null)
+  }
 
-  const saveCustomer = c => {
-    if (c.id) setCustomers(p => p.map(x => x.id === c.id ? c : x))
-    else setCustomers(p => [...p, { ...c, id: newId() }])
+  const saveCustomer = async c => {
+    const saved = await upsertCustomer(c)
+    setCustomers(p => c.id ? p.map(x => x.id === saved.id ? saved : x) : [...p, saved])
     setModal(null)
   }
-  const deleteCustomer = id => { setCustomers(p => p.filter(c => c.id !== id)); setModal(null) }
+  const handleDeleteCustomer = async id => {
+    await dbDeleteCustomer(id)
+    setCustomers(p => p.filter(c => c.id !== id))
+    setModal(null)
+  }
 
-  const saveMenu = m => {
-    if (m.id) setMenus(p => p.map(x => x.id === m.id ? m : x))
-    else setMenus(p => [...p, { ...m, id: newId() }])
+  const saveMenu = async m => {
+    const saved = await upsertMenu(m)
+    setMenus(p => m.id ? p.map(x => x.id === saved.id ? saved : x) : [...p, saved])
     setModal(null)
   }
-  const deleteMenu = id => { setMenus(p => p.filter(m => m.id !== id)); setModal(null) }
+  const handleDeleteMenu = async id => {
+    await dbDeleteMenu(id)
+    setMenus(p => p.filter(m => m.id !== id))
+    setModal(null)
+  }
 
-  const saveStaff = s => {
-    if (s.id) setStaff(p => p.map(x => x.id === s.id ? s : x))
-    else setStaff(p => [...p, { ...s, id: newId() }])
+  const saveStaff = async s => {
+    const saved = await upsertStaff(s)
+    setStaff(p => s.id ? p.map(x => x.id === saved.id ? saved : x) : [...p, saved])
     setModal(null)
   }
-  const deleteStaff = id => { setStaff(p => p.filter(s => s.id !== id)); setModal(null) }
+  const handleDeleteStaff = async id => {
+    await dbDeleteStaff(id)
+    setStaff(p => p.filter(s => s.id !== id))
+    setModal(null)
+  }
 
   const shared = { appointments, customers, menus, staff, openModal }
 
@@ -847,25 +908,33 @@ export default function App() {
     <div className="app">
       <Sidebar page={page} setPage={setPage} />
       <main className="main-content">
-        {page === 'dashboard' && <Dashboard {...shared} setPage={setPage} />}
-        {page === 'calendar' && (
-          <CalendarPage {...shared}
-            calendarDate={calendarDate} setCalendarDate={setCalendarDate}
-            calendarView={calendarView} setCalendarView={setCalendarView}
-          />
+        {loading ? (
+          <LoadingScreen />
+        ) : error ? (
+          <ErrorScreen message={error} onRetry={loadAll} />
+        ) : (
+          <>
+            {page === 'dashboard' && <Dashboard {...shared} setPage={setPage} />}
+            {page === 'calendar' && (
+              <CalendarPage {...shared}
+                calendarDate={calendarDate} setCalendarDate={setCalendarDate}
+                calendarView={calendarView} setCalendarView={setCalendarView}
+              />
+            )}
+            {page === 'appointments' && <AppointmentsPage {...shared} />}
+            {page === 'customers' && <CustomersPage customers={customers} openModal={openModal} />}
+            {page === 'menus' && <MenusPage menus={menus} openModal={openModal} />}
+            {page === 'staff' && <StaffPage staff={staff} appointments={appointments} openModal={openModal} />}
+          </>
         )}
-        {page === 'appointments' && <AppointmentsPage {...shared} />}
-        {page === 'customers' && <CustomersPage customers={customers} openModal={openModal} />}
-        {page === 'menus' && <MenusPage menus={menus} openModal={openModal} />}
-        {page === 'staff' && <StaffPage staff={staff} appointments={appointments} openModal={openModal} />}
       </main>
       {modal && (
         <Modal modal={modal} onClose={() => setModal(null)}
           appointments={appointments} customers={customers} menus={menus} staff={staff}
-          saveAppointment={saveAppointment} deleteAppointment={deleteAppointment}
-          saveCustomer={saveCustomer} deleteCustomer={deleteCustomer}
-          saveMenu={saveMenu} deleteMenu={deleteMenu}
-          saveStaff={saveStaff} deleteStaff={deleteStaff}
+          saveAppointment={saveAppointment} deleteAppointment={handleDeleteAppointment}
+          saveCustomer={saveCustomer} deleteCustomer={handleDeleteCustomer}
+          saveMenu={saveMenu} deleteMenu={handleDeleteMenu}
+          saveStaff={saveStaff} deleteStaff={handleDeleteStaff}
         />
       )}
     </div>
