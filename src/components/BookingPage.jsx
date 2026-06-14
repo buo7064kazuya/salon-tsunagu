@@ -382,14 +382,42 @@ function ContactStep({ menu, selectedDate, selectedTime, onBack, onSubmit, submi
 }
 
 // ===== DONE =====
-function DoneStep({ menu, selectedDate, selectedTime, bookingInfo, onReset }) {
+const STATUS_DISPLAY = {
+  pending:   { label: '仮予約（確認待ち）', color: 'var(--gold)' },
+  confirmed: { label: '予約確定',           color: 'var(--success)' },
+  cancelled: { label: 'キャンセル',         color: 'var(--danger)' },
+}
+
+function DoneStep({ menu, selectedDate, selectedTime, bookingInfo, apptId, onReset }) {
+  const [liveStatus, setLiveStatus] = useState('pending')
+
+  useEffect(() => {
+    if (!apptId) return
+    const channel = supabase
+      .channel(`appt-status-${apptId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'appointments', filter: `id=eq.${apptId}` },
+        payload => { setLiveStatus(payload.new.status) }
+      )
+      .subscribe()
+    return () => supabase.removeChannel(channel)
+  }, [apptId])
+
+  const { label: statusLabel, color: statusColor } = STATUS_DISPLAY[liveStatus] ?? STATUS_DISPLAY.pending
+  const confirmed = liveStatus === 'confirmed'
+
   return (
     <div style={{ textAlign: 'center', padding: '8px 0' }}>
-      <div style={s.doneIcon}>✓</div>
-      <h2 style={s.doneTitle}>ご予約が完了しました</h2>
+      <div style={{ ...s.doneIcon, ...(confirmed ? s.doneIconConfirmed : {}) }}>✓</div>
+      <h2 style={s.doneTitle}>
+        {confirmed ? '予約が確定しました' : 'ご予約が完了しました'}
+      </h2>
       <p style={s.doneSub}>
         {bookingInfo?.name} 様のご予約を承りました。<br />
-        スタッフより確認のご連絡をいたします。
+        {confirmed
+          ? 'ご予約が確定しました。当日お待ちしております。'
+          : 'スタッフより確認のご連絡をいたします。'}
       </p>
 
       <div style={{ ...s.summaryBox, textAlign: 'left', marginBottom: '28px' }}>
@@ -411,7 +439,7 @@ function DoneStep({ menu, selectedDate, selectedTime, bookingInfo, onReset }) {
         </div>
         <div style={{ ...s.summaryRow, marginBottom: 0 }}>
           <span style={s.summaryLabel}>ステータス</span>
-          <span style={{ ...s.summaryValue, color: 'var(--gold)' }}>仮予約（確認待ち）</span>
+          <span style={{ ...s.summaryValue, color: statusColor, fontWeight: 700 }}>{statusLabel}</span>
         </div>
       </div>
 
@@ -441,6 +469,7 @@ export default function BookingPage() {
   const [calDate, setCalDate] = useState(new Date())
   const [submitting, setSubmitting] = useState(false)
   const [bookingInfo, setBookingInfo] = useState(null)
+  const [apptId, setApptId] = useState(null)
 
   useEffect(() => {
     Promise.all([fetchPublicMenus(), fetchPublicStaff()])
@@ -457,7 +486,7 @@ export default function BookingPage() {
       const available = getAvailableStaffIds(selectedTime, selectedMenu.duration, appointments, staffIds)
       const staffId = available.length > 0 ? available[0] : (staff[0]?.id ?? null)
 
-      await createPublicBooking({
+      const appt = await createPublicBooking({
         name, phone, notes,
         menuId: selectedMenu.id,
         staffId,
@@ -466,6 +495,7 @@ export default function BookingPage() {
         duration: selectedMenu.duration,
       })
       setBookingInfo({ name, phone })
+      setApptId(appt.id)
       setStep('done')
     } finally {
       setSubmitting(false)
@@ -479,6 +509,7 @@ export default function BookingPage() {
     setSelectedTime(null)
     setCalDate(new Date())
     setBookingInfo(null)
+    setApptId(null)
   }
 
   if (loading) {
@@ -554,6 +585,7 @@ export default function BookingPage() {
               selectedDate={selectedDate}
               selectedTime={selectedTime}
               bookingInfo={bookingInfo}
+              apptId={apptId}
               onReset={reset}
             />
           )}
@@ -712,7 +744,10 @@ const s = {
     width: '60px', height: '60px', borderRadius: '50%',
     background: 'rgba(92,184,92,0.12)', border: '2px solid #5CB85C',
     color: '#5CB85C', fontSize: '24px', lineHeight: '60px',
-    margin: '0 auto 16px',
+    margin: '0 auto 16px', transition: 'background 0.4s, border-color 0.4s',
+  },
+  doneIconConfirmed: {
+    background: 'rgba(92,184,92,0.3)', border: '2px solid #5CB85C',
   },
   doneTitle: { fontSize: '18px', fontWeight: 700, color: 'var(--text)', marginBottom: '8px' },
   doneSub: { fontSize: '13px', color: 'var(--text-muted)', marginBottom: '24px', lineHeight: 1.6 },

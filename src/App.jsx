@@ -431,7 +431,7 @@ function WeekView({ baseDate, appointments, customers, staff, openModal }) {
 }
 
 // ==================== APPOINTMENTS PAGE ====================
-function AppointmentsPage({ appointments, customers, menus, staff, openModal }) {
+function AppointmentsPage({ appointments, customers, menus, staff, openModal, onConfirm }) {
   const [search, setSearch] = useState('')
   const [dateFilter, setDateFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
@@ -501,7 +501,21 @@ function AppointmentsPage({ appointments, customers, menus, staff, openModal }) 
                       </span>
                     </td>
                     <td>
-                      <button className="btn-icon-sm" onClick={e => { e.stopPropagation(); openModal('appointment', a) }}>✎</button>
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center', justifyContent: 'flex-end' }}>
+                        {a.status === 'pending' && (
+                          <button
+                            onClick={e => { e.stopPropagation(); onConfirm(a.id) }}
+                            style={{
+                              background: 'rgba(92,184,92,0.12)', border: '1px solid rgba(92,184,92,0.4)',
+                              color: '#5CB85C', borderRadius: '6px', padding: '4px 10px',
+                              fontSize: '11px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
+                            }}
+                          >
+                            確定する
+                          </button>
+                        )}
+                        <button className="btn-icon-sm" onClick={e => { e.stopPropagation(); openModal('appointment', a) }}>✎</button>
+                      </div>
                     </td>
                   </tr>
                 )
@@ -1011,6 +1025,13 @@ export default function App() {
     setModal(null)
   }
 
+  const confirmAppointment = async id => {
+    const appt = appointments.find(a => a.id === id)
+    if (!appt) return
+    const saved = await upsertAppointment({ ...appt, status: 'confirmed' })
+    setAppointments(p => p.map(a => a.id === saved.id ? saved : a))
+  }
+
   const saveCustomer = async c => {
     const saved = await upsertCustomer(c)
     setCustomers(p => c.id ? p.map(x => x.id === saved.id ? saved : x) : [...p, saved])
@@ -1067,7 +1088,7 @@ export default function App() {
                 calendarView={calendarView} setCalendarView={setCalendarView}
               />
             )}
-            {page === 'appointments' && <AppointmentsPage {...shared} />}
+            {page === 'appointments' && <AppointmentsPage {...shared} onConfirm={confirmAppointment} />}
             {page === 'customers' && <CustomersPage customers={customers} openModal={openModal} />}
             {page === 'menus' && <MenusPage menus={menus} openModal={openModal} />}
             {page === 'staff' && <StaffPage staff={staff} appointments={appointments} openModal={openModal} />}
