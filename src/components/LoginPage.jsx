@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../lib/AuthContext'
+import PrivacyPolicy from './PrivacyPolicy'
 
 export default function LoginPage() {
   const { signIn, signUp } = useAuth()
@@ -9,6 +10,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [signupDone, setSignupDone] = useState(false)
+  const [showPrivacy, setShowPrivacy] = useState(false)
 
   const handleSubmit = async e => {
     e.preventDefault()
@@ -115,7 +117,15 @@ export default function LoginPage() {
             </>
           )}
         </div>
+
+        <div style={styles.footer}>
+          <button style={styles.footerLink} onClick={() => setShowPrivacy(true)}>
+            プライバシーポリシー
+          </button>
+        </div>
       </div>
+
+      {showPrivacy && <PrivacyPolicy onClose={() => setShowPrivacy(false)} />}
     </div>
   )
 }
@@ -231,5 +241,21 @@ const styles = {
     textAlign: 'center',
     marginBottom: '20px',
     lineHeight: 1.6,
+  },
+  footer: {
+    marginTop: '20px',
+    textAlign: 'center',
+    borderTop: '1px solid var(--border-light)',
+    paddingTop: '16px',
+  },
+  footerLink: {
+    background: 'none',
+    border: 'none',
+    color: 'var(--text-muted)',
+    fontSize: '11px',
+    cursor: 'pointer',
+    padding: '0',
+    textDecoration: 'underline',
+    letterSpacing: '0.03em',
   },
 }
