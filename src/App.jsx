@@ -524,7 +524,7 @@ function AppointmentsPage({ appointments, customers, menus, staff, openModal, on
                           </button>
                         )}
                         <button
-                          onClick={e => { e.stopPropagation(); copyBookingUrl(a.id) }}
+                          onClick={e => { e.stopPropagation(); copyBookingUrl(a.publicId) }}
                           style={{
                             background: copiedId === a.id ? 'rgba(92,184,92,0.12)' : 'none',
                             border: `1px solid ${copiedId === a.id ? 'rgba(92,184,92,0.4)' : 'var(--border-light)'}`,
@@ -1002,7 +1002,8 @@ export default function App() {
         payload => {
           const r = payload.new
           const appt = {
-            id: r.id, customerId: r.customer_id, staffId: r.staff_id,
+            id: r.id, publicId: r.public_id,
+            customerId: r.customer_id, staffId: r.staff_id,
             menuId: r.menu_id, date: r.date, time: r.time,
             duration: r.duration, notes: r.notes, status: r.status,
           }

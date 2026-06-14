@@ -3,6 +3,7 @@ import { supabase } from './supabase'
 // snake_case (DB) <-> camelCase (app) 変換
 const toAppAppointment = r => ({
   id: r.id,
+  publicId: r.public_id,
   customerId: r.customer_id,
   staffId: r.staff_id,
   menuId: r.menu_id,

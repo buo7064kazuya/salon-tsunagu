@@ -102,7 +102,7 @@ async function createPublicBooking({ name, phone, email, notes, menuId, staffId,
       notes: notes || '',
       status: 'pending',
     })
-    .select('id')
+    .select('id, public_id')
     .single()
   if (ae) throw ae
 
@@ -399,7 +399,7 @@ const STATUS_DISPLAY = {
   cancelled: { label: 'キャンセル',         color: 'var(--danger)' },
 }
 
-function DoneStep({ menu, selectedDate, selectedTime, bookingInfo, apptId, onReset }) {
+function DoneStep({ menu, selectedDate, selectedTime, bookingInfo, apptId, apptPublicId, onReset }) {
   const [liveStatus, setLiveStatus] = useState('pending')
 
   useEffect(() => {
@@ -460,11 +460,24 @@ function DoneStep({ menu, selectedDate, selectedTime, bookingInfo, apptId, onRes
         </div>
       </div>
 
-      <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '20px', lineHeight: 1.7 }}>
+      <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '16px', lineHeight: 1.7 }}>
         ご登録いただいた電話番号にご連絡いたします。<br />
-        キャンセルの場合はお早めにお問い合わせください。
+        キャンセルの場合は予約確認ページからお手続きください。
       </p>
 
+      {apptPublicId && (
+        <a
+          href={`/booking/${apptPublicId}`}
+          style={{
+            display: 'inline-block', marginBottom: '16px',
+            fontSize: '12px', color: 'var(--gold)', textDecoration: 'underline',
+          }}
+        >
+          予約確認・キャンセルページを開く
+        </a>
+      )}
+
+      <br />
       <button style={s.btnSecondary} onClick={onReset}>別の予約をする</button>
     </div>
   )
@@ -487,6 +500,7 @@ export default function BookingPage() {
   const [submitting, setSubmitting] = useState(false)
   const [bookingInfo, setBookingInfo] = useState(null)
   const [apptId, setApptId] = useState(null)
+  const [apptPublicId, setApptPublicId] = useState(null)
 
   useEffect(() => {
     Promise.all([fetchPublicMenus(), fetchPublicStaff()])
@@ -513,6 +527,7 @@ export default function BookingPage() {
       })
       setBookingInfo({ name, phone, email })
       setApptId(appt.id)
+      setApptPublicId(appt.public_id)
       setStep('done')
     } finally {
       setSubmitting(false)
@@ -527,6 +542,7 @@ export default function BookingPage() {
     setCalDate(new Date())
     setBookingInfo(null)
     setApptId(null)
+    setApptPublicId(null)
   }
 
   if (loading) {
@@ -603,6 +619,7 @@ export default function BookingPage() {
               selectedTime={selectedTime}
               bookingInfo={bookingInfo}
               apptId={apptId}
+              apptPublicId={apptPublicId}
               onReset={reset}
             />
           )}
