@@ -6,6 +6,8 @@ import {
   fetchCustomers, upsertCustomer, deleteCustomer as dbDeleteCustomer,
   fetchAppointments, upsertAppointment, deleteAppointment as dbDeleteAppointment,
 } from './lib/db'
+import { useAuth } from './lib/AuthContext'
+import LoginPage from './components/LoginPage'
 
 // ==================== HELPERS ====================
 function getTodayStr() {
@@ -59,7 +61,7 @@ const NAV = [
   { id: 'staff', label: 'スタッフ管理', icon: '◑' },
 ]
 
-function Sidebar({ page, setPage }) {
+function Sidebar({ page, setPage, user, onSignOut }) {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
@@ -81,7 +83,19 @@ function Sidebar({ page, setPage }) {
           </button>
         ))}
       </nav>
-      <div className="sidebar-footer">© 2024 サロンつなぐ</div>
+      <div className="sidebar-footer" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div style={{ fontSize: '11px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {user?.email}
+        </div>
+        <button
+          onClick={onSignOut}
+          style={{ background: 'none', border: '1px solid var(--border-light)', color: 'var(--text-muted)', borderRadius: '6px', padding: '5px 10px', fontSize: '12px', cursor: 'pointer', textAlign: 'left', transition: 'border-color 0.15s, color 0.15s' }}
+          onMouseEnter={e => { e.target.style.borderColor = 'var(--danger)'; e.target.style.color = 'var(--danger)' }}
+          onMouseLeave={e => { e.target.style.borderColor = 'var(--border-light)'; e.target.style.color = 'var(--text-muted)' }}
+        >
+          ログアウト
+        </button>
+      </div>
     </aside>
   )
 }
@@ -822,6 +836,7 @@ function StaffForm({ data, onSave, onDelete, onClose }) {
 
 // ==================== ROOT APP ====================
 export default function App() {
+  const { session, user, signOut } = useAuth()
   const [page, setPage] = useState('dashboard')
   const [appointments, setAppointments] = useState([])
   const [customers, setCustomers] = useState([])
@@ -854,7 +869,20 @@ export default function App() {
     }
   }
 
-  useEffect(() => { loadAll() }, [])
+  // session が変化したとき（ログイン時）にデータを読み込む
+  useEffect(() => { if (session) loadAll() }, [session])
+
+  // セッション未確定（初期ロード中）
+  if (session === undefined) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg)', color: 'var(--gold)', fontSize: '1.1rem' }}>
+        読み込み中...
+      </div>
+    )
+  }
+
+  // 未ログイン
+  if (!session) return <LoginPage />
 
   const openModal = (type, data = null) => setModal({ type, data })
 
@@ -906,7 +934,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <Sidebar page={page} setPage={setPage} />
+      <Sidebar page={page} setPage={setPage} user={user} onSignOut={signOut} />
       <main className="main-content">
         {loading ? (
           <LoadingScreen />
