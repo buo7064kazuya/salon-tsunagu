@@ -435,6 +435,15 @@ function AppointmentsPage({ appointments, customers, menus, staff, openModal, on
   const [search, setSearch] = useState('')
   const [dateFilter, setDateFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [copiedId, setCopiedId] = useState(null)
+
+  const copyBookingUrl = id => {
+    const url = `${window.location.origin}/booking/${id}`
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedId(id)
+      setTimeout(() => setCopiedId(null), 2000)
+    })
+  }
 
   const filtered = appointments
     .filter(a => {
@@ -514,6 +523,19 @@ function AppointmentsPage({ appointments, customers, menus, staff, openModal, on
                             確定する
                           </button>
                         )}
+                        <button
+                          onClick={e => { e.stopPropagation(); copyBookingUrl(a.id) }}
+                          style={{
+                            background: copiedId === a.id ? 'rgba(92,184,92,0.12)' : 'none',
+                            border: `1px solid ${copiedId === a.id ? 'rgba(92,184,92,0.4)' : 'var(--border-light)'}`,
+                            color: copiedId === a.id ? '#5CB85C' : 'var(--text-muted)',
+                            borderRadius: '6px', padding: '4px 10px',
+                            fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap',
+                            transition: 'all 0.2s',
+                          }}
+                        >
+                          {copiedId === a.id ? '✓ コピー済み' : '確認URL'}
+                        </button>
                         <button className="btn-icon-sm" onClick={e => { e.stopPropagation(); openModal('appointment', a) }}>✎</button>
                       </div>
                     </td>

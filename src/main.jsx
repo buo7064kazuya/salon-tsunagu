@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import './index.css'
 import App from './App.jsx'
 import BookingPage from './components/BookingPage.jsx'
+import BookingStatusPage from './components/BookingStatusPage.jsx'
 import { AuthProvider } from './lib/AuthContext.jsx'
 
 createRoot(document.getElementById('root')).render(
@@ -11,6 +12,7 @@ createRoot(document.getElementById('root')).render(
     <BrowserRouter>
       <Routes>
         <Route path="/book/:salonId" element={<BookingPage />} />
+        <Route path="/booking/:id" element={<BookingStatusPage />} />
         <Route path="*" element={
           <AuthProvider>
             <App />
