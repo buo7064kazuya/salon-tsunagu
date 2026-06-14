@@ -740,8 +740,18 @@ function MenusPage({ menus, openModal }) {
 }
 
 // ==================== BLOCKED DATES PAGE ====================
+const BLOCK_TIME_OPTIONS = (() => {
+  const opts = [{ value: '', label: '終日（全時間）' }]
+  for (let h = 9; h < 19; h++) {
+    opts.push({ value: `${pad(h)}:00`, label: `${pad(h)}:00` })
+    opts.push({ value: `${pad(h)}:30`, label: `${pad(h)}:30` })
+  }
+  return opts
+})()
+
 function BlockedDatesPage({ blockedDates, onAdd, onRemove }) {
   const [date, setDate] = useState('')
+  const [time, setTime] = useState('')
   const [reason, setReason] = useState('')
   const [adding, setAdding] = useState(false)
   const [addError, setAddError] = useState(null)
@@ -751,8 +761,9 @@ function BlockedDatesPage({ blockedDates, onAdd, onRemove }) {
     setAdding(true)
     setAddError(null)
     try {
-      await onAdd(date, reason)
+      await onAdd(date, time || null, reason)
       setDate('')
+      setTime('')
       setReason('')
     } catch (e) {
       setAddError(e.message)
@@ -764,15 +775,15 @@ function BlockedDatesPage({ blockedDates, onAdd, onRemove }) {
   return (
     <div className="page">
       <div className="page-header">
-        <h1 className="page-title">休業日設定</h1>
+        <h1 className="page-title">休業日・ブロック設定</h1>
       </div>
       <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '20px' }}>
-        設定した日付はお客様の予約ページで選択できなくなります。
+        終日を選ぶとその日丸ごと、時間を指定するとその時間帯のみ予約不可になります。
       </p>
 
       <div className="card" style={{ marginBottom: '20px' }}>
-        <div className="card-header"><h2 className="card-title">休業日を追加</h2></div>
-        <div style={{ display: 'flex', gap: '10px', marginTop: '16px', flexWrap: 'wrap' }}>
+        <div className="card-header"><h2 className="card-title">ブロックを追加</h2></div>
+        <div style={{ display: 'flex', gap: '10px', marginTop: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
           <input
             type="date"
             className="input-field"
@@ -781,18 +792,24 @@ function BlockedDatesPage({ blockedDates, onAdd, onRemove }) {
             onChange={e => setDate(e.target.value)}
             style={{ width: 'auto' }}
           />
+          <select
+            className="input-field"
+            value={time}
+            onChange={e => setTime(e.target.value)}
+            style={{ width: 'auto' }}
+          >
+            {BLOCK_TIME_OPTIONS.map(o => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
           <input
             className="input-field"
             value={reason}
             onChange={e => setReason(e.target.value)}
-            placeholder="理由（例: 定休日、研修など）任意"
-            style={{ flex: 1, minWidth: '180px' }}
+            placeholder="理由（任意）"
+            style={{ flex: 1, minWidth: '140px' }}
           />
-          <button
-            className="btn-primary"
-            disabled={!date || adding}
-            onClick={handleAdd}
-          >
+          <button className="btn-primary" disabled={!date || adding} onClick={handleAdd}>
             {adding ? '追加中...' : '追加する'}
           </button>
         </div>
@@ -802,24 +819,27 @@ function BlockedDatesPage({ blockedDates, onAdd, onRemove }) {
       </div>
 
       <div className="card">
-        <div className="card-header"><h2 className="card-title">設定済みの休業日</h2></div>
+        <div className="card-header"><h2 className="card-title">設定済みのブロック</h2></div>
         {blockedDates.length === 0 ? (
-          <p className="empty-state">設定された休業日はありません</p>
+          <p className="empty-state">設定されたブロックはありません</p>
         ) : (
           <table className="data-table">
             <thead>
-              <tr><th>日付</th><th>理由</th><th /></tr>
+              <tr><th>日付</th><th>時間</th><th>理由</th><th /></tr>
             </thead>
             <tbody>
               {blockedDates.map(b => (
                 <tr key={b.id} className="table-row">
                   <td style={{ fontWeight: 600 }}>{fmtDate(b.date)}</td>
+                  <td style={{ color: b.time ? 'var(--gold)' : 'var(--text-muted)', fontWeight: b.time ? 600 : 400 }}>
+                    {b.time ? b.time.slice(0, 5) : '終日'}
+                  </td>
                   <td style={{ color: 'var(--text-muted)', fontSize: '13px' }}>{b.reason || '-'}</td>
                   <td style={{ textAlign: 'right' }}>
                     <button
                       className="btn-icon-sm"
                       style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}
-                      onClick={() => { if (window.confirm('この休業日を削除しますか？')) onRemove(b.id) }}
+                      onClick={() => { if (window.confirm('このブロックを削除しますか？')) onRemove(b.id) }}
                     >
                       削除
                     </button>
@@ -1318,9 +1338,9 @@ export default function App() {
     setModal(null)
   }
 
-  const handleAddBlocked = async (date, reason) => {
-    const saved = await addBlockedDate(date, reason)
-    setBlockedDates(p => [...p, saved].sort((a, b) => a.date.localeCompare(b.date)))
+  const handleAddBlocked = async (date, time, reason) => {
+    const saved = await addBlockedDate(date, time, reason)
+    setBlockedDates(p => [...p, saved].sort((a, b) => a.date.localeCompare(b.date) || (a.time || '').localeCompare(b.time || '')))
   }
   const handleRemoveBlocked = async id => {
     await dbRemoveBlockedDate(id)

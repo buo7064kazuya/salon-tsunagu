@@ -138,9 +138,9 @@ export async function fetchBlockedDates() {
   return data
 }
 
-export async function addBlockedDate(date, reason = '') {
+export async function addBlockedDate(date, time = null, reason = '') {
   const { data, error } = await supabase
-    .from('blocked_dates').insert({ date, reason: reason || null }).select().single()
+    .from('blocked_dates').insert({ date, time: time || null, reason: reason || null }).select().single()
   if (error) throw error
   return data
 }

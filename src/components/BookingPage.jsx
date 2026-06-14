@@ -218,11 +218,11 @@ function DateTimeStep({ menu, staff, salonId, selectedDate, setSelectedDate, sel
     return n.getHours() * 60 + n.getMinutes()
   }, [])
 
-  // 休業日を取得
+  // 休業日・ブロック時間帯を取得
   useEffect(() => {
     if (!salonId) return
-    supabase.from('blocked_dates').select('date').eq('salon_id', salonId)
-      .then(({ data }) => setBlockedDates((data || []).map(r => r.date)))
+    supabase.from('blocked_dates').select('date, time').eq('salon_id', salonId)
+      .then(({ data }) => setBlockedDates(data || []))
   }, [salonId])
 
   useEffect(() => {
@@ -238,6 +238,15 @@ function DateTimeStep({ menu, staff, salonId, selectedDate, setSelectedDate, sel
   const slots = useMemo(() => generateSlots(menu.duration), [menu.duration])
   const staffIds = useMemo(() => staff.map(st => st.id), [staff])
 
+  const blockedTimesForDate = useMemo(() => {
+    if (!selectedDate) return new Set()
+    return new Set(
+      blockedDates
+        .filter(b => b.date === selectedDate && b.time)
+        .map(b => b.time.slice(0, 5))
+    )
+  }, [blockedDates, selectedDate])
+
   const availMap = useMemo(() => {
     const map = {}
     slots.forEach(slot => {
@@ -246,10 +255,15 @@ function DateTimeStep({ menu, staff, salonId, selectedDate, setSelectedDate, sel
         map[slot] = []
         return
       }
+      // 時間ブロックに一致するスロットはブロック
+      if (blockedTimesForDate.has(slot)) {
+        map[slot] = []
+        return
+      }
       map[slot] = getAvailableStaffIds(slot, menu.duration, appointments, staffIds)
     })
     return map
-  }, [slots, menu.duration, appointments, staffIds, selectedDate, nowMins])
+  }, [slots, menu.duration, appointments, staffIds, selectedDate, nowMins, blockedTimesForDate])
 
   return (
     <>
@@ -279,7 +293,7 @@ function DateTimeStep({ menu, staff, salonId, selectedDate, setSelectedDate, sel
             const ds = `${y}-${pad(mo + 1)}-${pad(day)}`
             const isPast    = ds < TODAY
             const isFuture  = ds > maxDateStr
-            const isBlocked = blockedDates.includes(ds)
+            const isBlocked = blockedDates.some(b => b.date === ds && !b.time)
             const disabled  = isPast || isFuture || isBlocked
             const isSelected = ds === selectedDate
             const isToday = ds === TODAY
