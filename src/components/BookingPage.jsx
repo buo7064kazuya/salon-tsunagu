@@ -193,6 +193,7 @@ function MenuStep({ menus, selected, onSelect, onNext }) {
 function DateTimeStep({ menu, staff, salonId, selectedDate, setSelectedDate, selectedTime, setSelectedTime, calDate, setCalDate, onBack, onNext }) {
   const [appointments, setAppointments] = useState([])
   const [blockedDates, setBlockedDates] = useState([])
+  const [weeklyBlocks, setWeeklyBlocks] = useState([])
   const [loadingSlots, setLoadingSlots] = useState(false)
   const TODAY = getTodayStr()
 
@@ -218,11 +219,16 @@ function DateTimeStep({ menu, staff, salonId, selectedDate, setSelectedDate, sel
     return n.getHours() * 60 + n.getMinutes()
   }, [])
 
-  // 休業日・ブロック時間帯を取得
+  // 休業日・定期ブロックを取得
   useEffect(() => {
     if (!salonId) return
-    supabase.from('blocked_dates').select('date, time').eq('salon_id', salonId)
-      .then(({ data }) => setBlockedDates(data || []))
+    Promise.all([
+      supabase.from('blocked_dates').select('date, time').eq('salon_id', salonId),
+      supabase.from('weekly_blocks').select('day_of_week, start_time, end_time').eq('salon_id', salonId),
+    ]).then(([bd, wb]) => {
+      setBlockedDates(bd.data || [])
+      setWeeklyBlocks(wb.data || [])
+    })
   }, [salonId])
 
   useEffect(() => {
@@ -234,6 +240,11 @@ function DateTimeStep({ menu, staff, salonId, selectedDate, setSelectedDate, sel
       .catch(console.error)
       .finally(() => setLoadingSlots(false))
   }, [selectedDate])
+
+  const allDayWeeklyDows = useMemo(
+    () => new Set(weeklyBlocks.filter(b => !b.start_time).map(b => b.day_of_week)),
+    [weeklyBlocks]
+  )
 
   const slots = useMemo(() => generateSlots(menu.duration), [menu.duration])
   const staffIds = useMemo(() => staff.map(st => st.id), [staff])
@@ -247,23 +258,48 @@ function DateTimeStep({ menu, staff, salonId, selectedDate, setSelectedDate, sel
     )
   }, [blockedDates, selectedDate])
 
+  const weeklyBlocksForDow = useMemo(() => {
+    if (!selectedDate) return []
+    const dow = new Date(selectedDate + 'T12:00:00').getDay()
+    return weeklyBlocks.filter(b => b.day_of_week === dow)
+  }, [weeklyBlocks, selectedDate])
+
   const availMap = useMemo(() => {
     const map = {}
+    const hasAllDayWeekly = weeklyBlocksForDow.some(b => !b.start_time)
     slots.forEach(slot => {
       // 当日の現在時刻以前のスロットはブロック
       if (selectedDate === TODAY && timeToMins(slot) <= nowMins) {
         map[slot] = []
         return
       }
-      // 時間ブロックに一致するスロットはブロック
+      // 終日定期ブロック
+      if (hasAllDayWeekly) {
+        map[slot] = []
+        return
+      }
+      // 日付指定の時間ブロック
       if (blockedTimesForDate.has(slot)) {
+        map[slot] = []
+        return
+      }
+      // 定期時間ブロック（重複チェック）
+      const slotStart = timeToMins(slot)
+      const slotEnd = slotStart + menu.duration
+      const weeklyTimeBlocked = weeklyBlocksForDow.some(b => {
+        if (!b.start_time) return false
+        const bStart = timeToMins(b.start_time.slice(0, 5))
+        const bEnd = timeToMins(b.end_time.slice(0, 5))
+        return slotStart < bEnd && slotEnd > bStart
+      })
+      if (weeklyTimeBlocked) {
         map[slot] = []
         return
       }
       map[slot] = getAvailableStaffIds(slot, menu.duration, appointments, staffIds)
     })
     return map
-  }, [slots, menu.duration, appointments, staffIds, selectedDate, nowMins, blockedTimesForDate])
+  }, [slots, menu.duration, appointments, staffIds, selectedDate, nowMins, blockedTimesForDate, weeklyBlocksForDow])
 
   return (
     <>
@@ -293,7 +329,7 @@ function DateTimeStep({ menu, staff, salonId, selectedDate, setSelectedDate, sel
             const ds = `${y}-${pad(mo + 1)}-${pad(day)}`
             const isPast    = ds < TODAY
             const isFuture  = ds > maxDateStr
-            const isBlocked = blockedDates.some(b => b.date === ds && !b.time)
+            const isBlocked = blockedDates.some(b => b.date === ds && !b.time) || allDayWeeklyDows.has(dow)
             const disabled  = isPast || isFuture || isBlocked
             const isSelected = ds === selectedDate
             const isToday = ds === TODAY

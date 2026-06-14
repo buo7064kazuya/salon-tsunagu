@@ -6,6 +6,7 @@ import {
   fetchCustomers, upsertCustomer, deleteCustomer as dbDeleteCustomer,
   fetchAppointments, upsertAppointment, deleteAppointment as dbDeleteAppointment,
   fetchBlockedDates, addBlockedDate, removeBlockedDate as dbRemoveBlockedDate,
+  fetchWeeklyBlocks, addWeeklyBlock, removeWeeklyBlock as dbRemoveWeeklyBlock,
 } from './lib/db'
 import { supabase } from './lib/supabase'
 import { useAuth } from './lib/AuthContext'
@@ -146,6 +147,7 @@ const NAV = [
   { id: 'menus', label: 'メニュー管理', icon: '◐' },
   { id: 'staff', label: 'スタッフ管理', icon: '◑' },
   { id: 'blocked', label: '休業日設定', icon: '◻' },
+  { id: 'weekly', label: '定期ブロック', icon: '◫' },
 ]
 
 function Sidebar({ page, setPage, user, onSignOut, notifPerm, onRequestNotif }) {
@@ -854,6 +856,146 @@ function BlockedDatesPage({ blockedDates, onAdd, onRemove }) {
   )
 }
 
+// ==================== WEEKLY BLOCKS PAGE ====================
+const DAYS_JP_FULL = ['日曜', '月曜', '火曜', '水曜', '木曜', '金曜', '土曜']
+
+const WEEK_TIME_OPTIONS = (() => {
+  const opts = []
+  for (let h = 9; h <= 19; h++) {
+    opts.push({ value: `${pad(h)}:00`, label: `${pad(h)}:00` })
+    if (h < 19) opts.push({ value: `${pad(h)}:30`, label: `${pad(h)}:30` })
+  }
+  return opts
+})()
+
+function WeeklyBlocksPage({ weeklyBlocks, onAdd, onRemove }) {
+  const [dow, setDow] = useState(1)
+  const [allDay, setAllDay] = useState(true)
+  const [startTime, setStartTime] = useState('09:00')
+  const [endTime, setEndTime] = useState('10:00')
+  const [reason, setReason] = useState('')
+  const [adding, setAdding] = useState(false)
+  const [addError, setAddError] = useState(null)
+
+  const validEnd = WEEK_TIME_OPTIONS.filter(o => o.value > startTime)
+
+  const handleAdd = async () => {
+    setAdding(true)
+    setAddError(null)
+    try {
+      await onAdd(Number(dow), allDay ? null : startTime, allDay ? null : endTime, reason)
+      setReason('')
+    } catch (e) {
+      setAddError(e.message)
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  return (
+    <div className="page">
+      <div className="page-header">
+        <h1 className="page-title">定期ブロック設定</h1>
+      </div>
+      <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '20px' }}>
+        毎週特定の曜日・時間帯を予約不可にします。終日を選ぶとその曜日丸ごとブロックされます。
+      </p>
+
+      <div className="card" style={{ marginBottom: '20px' }}>
+        <div className="card-header"><h2 className="card-title">定期ブロックを追加</h2></div>
+        <div style={{ display: 'flex', gap: '10px', marginTop: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <select
+            className="input-field"
+            value={dow}
+            onChange={e => setDow(e.target.value)}
+            style={{ width: 'auto' }}
+          >
+            {DAYS_JP_FULL.map((d, i) => <option key={i} value={i}>{d}</option>)}
+          </select>
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--text)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            <input type="checkbox" checked={allDay} onChange={e => setAllDay(e.target.checked)} />
+            終日
+          </label>
+
+          {!allDay && (
+            <>
+              <select
+                className="input-field"
+                value={startTime}
+                onChange={e => { setStartTime(e.target.value); if (e.target.value >= endTime) setEndTime(WEEK_TIME_OPTIONS.find(o => o.value > e.target.value)?.value || '19:00') }}
+                style={{ width: 'auto' }}
+              >
+                {WEEK_TIME_OPTIONS.slice(0, -1).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+              <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>〜</span>
+              <select
+                className="input-field"
+                value={endTime}
+                onChange={e => setEndTime(e.target.value)}
+                style={{ width: 'auto' }}
+              >
+                {validEnd.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </>
+          )}
+
+          <input
+            className="input-field"
+            value={reason}
+            onChange={e => setReason(e.target.value)}
+            placeholder="理由（任意）"
+            style={{ flex: 1, minWidth: '120px' }}
+          />
+          <button
+            className="btn-primary"
+            disabled={adding}
+            onClick={handleAdd}
+          >
+            {adding ? '追加中...' : '追加する'}
+          </button>
+        </div>
+        {addError && (
+          <div style={{ color: 'var(--danger)', fontSize: '12px', marginTop: '8px' }}>{addError}</div>
+        )}
+      </div>
+
+      <div className="card">
+        <div className="card-header"><h2 className="card-title">設定済みの定期ブロック</h2></div>
+        {weeklyBlocks.length === 0 ? (
+          <p className="empty-state">設定された定期ブロックはありません</p>
+        ) : (
+          <table className="data-table">
+            <thead>
+              <tr><th>曜日</th><th>時間帯</th><th>理由</th><th /></tr>
+            </thead>
+            <tbody>
+              {weeklyBlocks.map(b => (
+                <tr key={b.id} className="table-row">
+                  <td style={{ fontWeight: 600 }}>{DAYS_JP_FULL[b.day_of_week]}</td>
+                  <td style={{ color: b.start_time ? 'var(--gold)' : 'var(--text-muted)', fontWeight: b.start_time ? 600 : 400 }}>
+                    {b.start_time ? `${b.start_time.slice(0, 5)}〜${b.end_time.slice(0, 5)}` : '終日'}
+                  </td>
+                  <td style={{ color: 'var(--text-muted)', fontSize: '13px' }}>{b.reason || '-'}</td>
+                  <td style={{ textAlign: 'right' }}>
+                    <button
+                      className="btn-icon-sm"
+                      style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}
+                      onClick={() => { if (window.confirm('この定期ブロックを削除しますか？')) onRemove(b.id) }}
+                    >
+                      削除
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ==================== STAFF PAGE ====================
 function StaffPage({ staff, appointments, openModal }) {
   return (
@@ -1203,6 +1345,7 @@ export default function App() {
   const [menus, setMenus] = useState([])
   const [staff, setStaff] = useState([])
   const [blockedDates, setBlockedDates] = useState([])
+  const [weeklyBlocks, setWeeklyBlocks] = useState([])
   const [calendarDate, setCalendarDate] = useState(new Date())
   const [calendarView, setCalendarView] = useState('month')
   const [modal, setModal] = useState(null)
@@ -1223,18 +1366,20 @@ export default function App() {
     setLoading(true)
     setError(null)
     try {
-      const [s, m, c, a, bd] = await Promise.all([
+      const [s, m, c, a, bd, wb] = await Promise.all([
         fetchStaff(),
         fetchMenus(),
         fetchCustomers(),
         fetchAppointments(),
         fetchBlockedDates(),
+        fetchWeeklyBlocks(),
       ])
       setStaff(s)
       setMenus(m)
       setCustomers(c)
       setAppointments(a)
       setBlockedDates(bd)
+      setWeeklyBlocks(wb)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -1347,6 +1492,15 @@ export default function App() {
     setBlockedDates(p => p.filter(b => b.id !== id))
   }
 
+  const handleAddWeekly = async (dow, startTime, endTime, reason) => {
+    const saved = await addWeeklyBlock(dow, startTime, endTime, reason)
+    setWeeklyBlocks(p => [...p, saved].sort((a, b) => a.day_of_week - b.day_of_week || (a.start_time || '').localeCompare(b.start_time || '')))
+  }
+  const handleRemoveWeekly = async id => {
+    await dbRemoveWeeklyBlock(id)
+    setWeeklyBlocks(p => p.filter(b => b.id !== id))
+  }
+
   const shared = { appointments, customers, menus, staff, openModal }
 
   return (
@@ -1375,6 +1529,7 @@ export default function App() {
             {page === 'menus' && <MenusPage menus={menus} openModal={openModal} />}
             {page === 'staff' && <StaffPage staff={staff} appointments={appointments} openModal={openModal} />}
             {page === 'blocked' && <BlockedDatesPage blockedDates={blockedDates} onAdd={handleAddBlocked} onRemove={handleRemoveBlocked} />}
+            {page === 'weekly' && <WeeklyBlocksPage weeklyBlocks={weeklyBlocks} onAdd={handleAddWeekly} onRemove={handleRemoveWeekly} />}
           </>
         )}
       </main>

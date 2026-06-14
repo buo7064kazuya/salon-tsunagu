@@ -149,3 +149,24 @@ export async function removeBlockedDate(id) {
   const { error } = await supabase.from('blocked_dates').delete().eq('id', id)
   if (error) throw error
 }
+
+export async function fetchWeeklyBlocks() {
+  const { data, error } = await supabase
+    .from('weekly_blocks').select('*').order('day_of_week').order('start_time')
+  if (error) throw error
+  return data
+}
+
+export async function addWeeklyBlock(dayOfWeek, startTime, endTime, reason) {
+  const { data, error } = await supabase
+    .from('weekly_blocks')
+    .insert({ day_of_week: dayOfWeek, start_time: startTime || null, end_time: endTime || null, reason: reason || null })
+    .select().single()
+  if (error) throw error
+  return data
+}
+
+export async function removeWeeklyBlock(id) {
+  const { error } = await supabase.from('weekly_blocks').delete().eq('id', id)
+  if (error) throw error
+}
