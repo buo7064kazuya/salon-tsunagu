@@ -25,10 +25,29 @@ const fmtDate = str => {
   return `${y}年${parseInt(m)}月${parseInt(d)}日`
 }
 
+function calcAgeGroup(birthdate) {
+  if (!birthdate) return null
+  const today = new Date()
+  const birth = new Date(birthdate)
+  let age = today.getFullYear() - birth.getFullYear()
+  const md = today.getMonth() - birth.getMonth()
+  if (md < 0 || (md === 0 && today.getDate() < birth.getDate())) age--
+  if (age < 0 || age > 120) return null
+  if (age < 10) return '10歳未満'
+  if (age >= 70) return '70代以上'
+  return `${Math.floor(age / 10) * 10}代`
+}
+
 const DAYS_JP = ['日', '月', '火', '水', '木', '金', '土']
 const MONTHS_JP = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月']
 const STATUS_LABELS = { confirmed: '確定', pending: '仮予約', cancelled: 'キャンセル' }
 const STATUS_COLORS = { confirmed: '#5CB85C', pending: '#C9A96E', cancelled: '#E05C5C' }
+
+const AGE_GROUP_ORDER = ['10歳未満', '10代', '20代', '30代', '40代', '50代', '60代', '70代以上']
+const AGE_GROUP_COLORS = [
+  '#8B6F9E', '#5C8BCC', '#5CA89E', '#C9A96E',
+  '#E0A85C', '#E05C5C', '#5CB85C', '#9E6F8B',
+]
 
 function timeToMins(t) {
   const [h, m] = t.split(':').map(Number)
@@ -51,6 +70,71 @@ function checkDuplicate(appointments, appt, excludeId = null) {
 
 function getDaysInMonth(y, m) { return new Date(y, m + 1, 0).getDate() }
 function getFirstDOW(y, m) { return new Date(y, m, 1).getDay() }
+
+// ==================== AGE GROUP CHART ====================
+function AgeGroupChart({ customers }) {
+  const counts = {}
+  customers.forEach(c => {
+    const g = c.ageGroup || (c.birthdate ? calcAgeGroup(c.birthdate) : null)
+    if (g) counts[g] = (counts[g] || 0) + 1
+  })
+
+  const groups = AGE_GROUP_ORDER.filter(g => counts[g] > 0)
+  const total = Object.values(counts).reduce((s, n) => s + n, 0)
+
+  if (total === 0) {
+    return (
+      <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: '13px' }}>
+        生年月日が登録された顧客がいません
+      </div>
+    )
+  }
+
+  const max = Math.max(...groups.map(g => counts[g]))
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      {groups.map((g, i) => {
+        const color = AGE_GROUP_COLORS[AGE_GROUP_ORDER.indexOf(g)] || '#C9A96E'
+        const count = counts[g]
+        const pct = Math.round((count / total) * 100)
+        const barW = Math.round((count / max) * 100)
+        return (
+          <div key={g} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{
+              width: '56px', fontSize: '12px', fontWeight: 600,
+              color: 'var(--text-muted)', textAlign: 'right', flexShrink: 0,
+            }}>{g}</div>
+            <div style={{ flex: 1, background: 'rgba(255,255,255,0.06)', borderRadius: '4px', height: '22px', overflow: 'hidden' }}>
+              <div style={{
+                width: `${barW}%`, height: '100%',
+                background: `linear-gradient(90deg, ${color}cc, ${color})`,
+                borderRadius: '4px',
+                transition: 'width 0.6s cubic-bezier(0.4,0,0.2,1)',
+                display: 'flex', alignItems: 'center', paddingLeft: '8px',
+              }}>
+                {barW > 25 && (
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: '#0F0E0D' }}>
+                    {count}名
+                  </span>
+                )}
+              </div>
+            </div>
+            <div style={{ width: '44px', fontSize: '12px', color, fontWeight: 700, textAlign: 'right', flexShrink: 0 }}>
+              {barW <= 25 ? `${count}名` : `${pct}%`}
+            </div>
+          </div>
+        )
+      })}
+      <div style={{
+        marginTop: '4px', fontSize: '11px', color: 'var(--text-muted)',
+        textAlign: 'right', borderTop: '1px solid var(--border-light)', paddingTop: '8px',
+      }}>
+        年代登録済み: {total}名 / 全{customers.length}名
+      </div>
+    </div>
+  )
+}
 
 // ==================== SIDEBAR ====================
 const NAV = [
@@ -286,6 +370,15 @@ function Dashboard({ appointments, customers, menus, staff, openModal, setPage }
             )
           })}
         </div>
+      </div>
+
+      {/* 年代別顧客グラフ */}
+      <div className="card" style={{ marginTop: '20px' }}>
+        <div className="card-header">
+          <h2 className="card-title">年代別顧客数</h2>
+          <button className="btn-link" onClick={() => setPage('customers')}>顧客管理 →</button>
+        </div>
+        <AgeGroupChart customers={customers} />
       </div>
     </div>
   )
@@ -570,26 +663,41 @@ function CustomersPage({ customers, openModal }) {
       <div className="card">
         <table className="data-table">
           <thead>
-            <tr><th>顧客名</th><th>電話番号</th><th>メールアドレス</th><th>来店回数</th><th>備考</th><th /></tr>
+            <tr><th>顧客名</th><th>電話番号</th><th>メールアドレス</th><th>年代</th><th>来店回数</th><th>備考</th><th /></tr>
           </thead>
           <tbody>
             {filtered.length === 0
-              ? <tr><td colSpan={6} className="empty-td">顧客が見つかりません</td></tr>
-              : filtered.map(c => (
-                <tr key={c.id} className="table-row" onClick={() => openModal('customer', c)}>
-                  <td>
-                    <div className="customer-name-cell">
-                      <div className="customer-avatar">{c.name[0]}</div>
-                      {c.name}
-                    </div>
-                  </td>
-                  <td>{c.phone || '-'}</td>
-                  <td>{c.email || '-'}</td>
-                  <td><span className="visit-badge">{c.visitCount}回</span></td>
-                  <td className="td-sub">{c.notes || '-'}</td>
-                  <td><button className="btn-icon-sm" onClick={e => { e.stopPropagation(); openModal('customer', c) }}>✎</button></td>
-                </tr>
-              ))
+              ? <tr><td colSpan={7} className="empty-td">顧客が見つかりません</td></tr>
+              : filtered.map(c => {
+                const ageGroup = c.ageGroup || (c.birthdate ? calcAgeGroup(c.birthdate) : null)
+                return (
+                  <tr key={c.id} className="table-row" onClick={() => openModal('customer', c)}>
+                    <td>
+                      <div className="customer-name-cell">
+                        <div className="customer-avatar">{c.name[0]}</div>
+                        {c.name}
+                      </div>
+                    </td>
+                    <td>{c.phone || '-'}</td>
+                    <td>{c.email || '-'}</td>
+                    <td>
+                      {ageGroup ? (
+                        <span style={{
+                          fontSize: '12px', fontWeight: 700, color: 'var(--gold)',
+                          background: 'rgba(201,169,110,0.12)',
+                          border: '1px solid rgba(201,169,110,0.3)',
+                          borderRadius: '12px', padding: '2px 10px',
+                        }}>
+                          {ageGroup}
+                        </span>
+                      ) : '-'}
+                    </td>
+                    <td><span className="visit-badge">{c.visitCount}回</span></td>
+                    <td className="td-sub">{c.notes || '-'}</td>
+                    <td><button className="btn-icon-sm" onClick={e => { e.stopPropagation(); openModal('customer', c) }}>✎</button></td>
+                  </tr>
+                )
+              })
             }
           </tbody>
         </table>
@@ -795,9 +903,12 @@ function CustomerForm({ data, onSave, onDelete, onClose }) {
     email: data?.email ?? '',
     notes: data?.notes ?? '',
     visitCount: data?.visitCount ?? 0,
+    birthdate: data?.birthdate ?? '',
   })
   const [saving, setSaving] = useState(false)
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  const ageGroup = calcAgeGroup(form.birthdate)
 
   const handleSave = async () => {
     if (!form.name) return
@@ -821,6 +932,29 @@ function CustomerForm({ data, onSave, onDelete, onClose }) {
         <div className="form-group">
           <label className="form-label">メールアドレス</label>
           <input type="email" className="input-field" value={form.email} onChange={e => set('email', e.target.value)} />
+        </div>
+        <div className="form-group full-w">
+          <label className="form-label">生年月日</label>
+          <input
+            type="date"
+            className="input-field"
+            value={form.birthdate || ''}
+            max={TODAY}
+            onChange={e => set('birthdate', e.target.value)}
+          />
+          {ageGroup && (
+            <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>年代：</span>
+              <span style={{
+                fontSize: '13px', fontWeight: 700, color: 'var(--gold)',
+                background: 'rgba(201,169,110,0.12)',
+                border: '1px solid rgba(201,169,110,0.35)',
+                borderRadius: '20px', padding: '2px 12px',
+              }}>
+                {ageGroup}
+              </span>
+            </div>
+          )}
         </div>
         <div className="form-group full-w">
           <label className="form-label">備考</label>
@@ -988,10 +1122,8 @@ export default function App() {
     }
   }
 
-  // session が変化したとき（ログイン時）にデータを読み込む
   useEffect(() => { if (session) loadAll() }, [session])
 
-  // Supabase Realtime: 新着予約をリアルタイム受信
   useEffect(() => {
     if (!session) return
     const channel = supabase
@@ -1023,7 +1155,6 @@ export default function App() {
     return () => { supabase.removeChannel(channel) }
   }, [session])
 
-  // セッション未確定（初期ロード中）
   if (session === undefined) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg)', color: 'var(--gold)', fontSize: '1.1rem' }}>
@@ -1032,7 +1163,6 @@ export default function App() {
     )
   }
 
-  // 未ログイン
   if (!session) return <LoginPage />
 
   const openModal = (type, data = null) => setModal({ type, data })

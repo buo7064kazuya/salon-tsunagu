@@ -7,6 +7,12 @@ const fmtPrice = n => `¥${Number(n || 0).toLocaleString()}`
 const fmtDate = s =>
   s ? new Date(s).toLocaleDateString('ja-JP', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'
 
+const AGE_GROUP_ORDER = ['10歳未満', '10代', '20代', '30代', '40代', '50代', '60代', '70代以上']
+const AGE_GROUP_COLORS = [
+  '#8B6F9E', '#5C8BCC', '#5CA89E', '#C9A96E',
+  '#E0A85C', '#E05C5C', '#5CB85C', '#9E6F8B',
+]
+
 // ==================== LAYOUT HELPERS ====================
 const bg = { minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: 'inherit' }
 const centered = { ...bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }
@@ -37,6 +43,86 @@ function StatCard({ label, value, sub, color }) {
       <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '14px', letterSpacing: '0.04em' }}>{label}</div>
       <div style={{ fontSize: '2rem', fontWeight: 700, color, marginBottom: '8px', letterSpacing: '-0.01em' }}>{value}</div>
       <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{sub}</div>
+    </div>
+  )
+}
+
+// ==================== AGE GROUP CHART (ADMIN) ====================
+function AgeGroupChart({ salons }) {
+  // 全サロンの顧客データから年代を集計（admin_stats に age_group_stats がある場合）
+  const [ageCounts, setAgeCounts] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    supabase.rpc('get_age_group_stats').then(({ data, error }) => {
+      if (!error && data) setAgeCounts(data)
+      setLoading(false)
+    })
+  }, [])
+
+  if (loading) {
+    return (
+      <div style={{ color: 'var(--text-muted)', fontSize: '13px', padding: '24px 0', textAlign: 'center' }}>
+        読み込み中...
+      </div>
+    )
+  }
+
+  if (!ageCounts || ageCounts.length === 0) {
+    return (
+      <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: '13px' }}>
+        年代データがありません（顧客の生年月日を登録すると表示されます）
+      </div>
+    )
+  }
+
+  const countsMap = {}
+  ageCounts.forEach(r => { countsMap[r.age_group] = Number(r.count) })
+
+  const groups = AGE_GROUP_ORDER.filter(g => countsMap[g] > 0)
+  const total = groups.reduce((s, g) => s + countsMap[g], 0)
+  const max = Math.max(...groups.map(g => countsMap[g]))
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      {groups.map(g => {
+        const color = AGE_GROUP_COLORS[AGE_GROUP_ORDER.indexOf(g)] || '#C9A96E'
+        const count = countsMap[g]
+        const pct = Math.round((count / total) * 100)
+        const barW = Math.round((count / max) * 100)
+        return (
+          <div key={g} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{
+              width: '60px', fontSize: '12px', fontWeight: 600,
+              color: 'var(--text-muted)', textAlign: 'right', flexShrink: 0,
+            }}>{g}</div>
+            <div style={{ flex: 1, background: 'rgba(255,255,255,0.06)', borderRadius: '4px', height: '24px', overflow: 'hidden' }}>
+              <div style={{
+                width: `${barW}%`, height: '100%',
+                background: `linear-gradient(90deg, ${color}cc, ${color})`,
+                borderRadius: '4px',
+                transition: 'width 0.6s cubic-bezier(0.4,0,0.2,1)',
+                display: 'flex', alignItems: 'center', paddingLeft: '10px',
+              }}>
+                {barW > 20 && (
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: '#0F0E0D' }}>
+                    {count}名
+                  </span>
+                )}
+              </div>
+            </div>
+            <div style={{ width: '52px', fontSize: '12px', color, fontWeight: 700, textAlign: 'right', flexShrink: 0 }}>
+              {barW <= 20 ? `${count}名` : `${pct}%`}
+            </div>
+          </div>
+        )
+      })}
+      <div style={{
+        marginTop: '4px', fontSize: '11px', color: 'var(--text-muted)',
+        textAlign: 'right', borderTop: '1px solid var(--border-light)', paddingTop: '8px',
+      }}>
+        年代登録済み顧客: 合計 {total}名
+      </div>
     </div>
   )
 }
@@ -149,6 +235,17 @@ function AdminStats({ stats }) {
         {cards.map(c => <StatCard key={c.label} {...c} />)}
       </div>
 
+      {/* 年代別顧客グラフ */}
+      <div style={{
+        background: 'var(--bg-card)', border: '1px solid var(--border-light)',
+        borderRadius: '16px', padding: '24px', marginBottom: '24px',
+      }}>
+        <h2 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text)', marginBottom: '20px', letterSpacing: '0.02em' }}>
+          年代別顧客数（全サロン合計）
+        </h2>
+        <AgeGroupChart salons={stats.salons} />
+      </div>
+
       <div style={{
         background: 'var(--bg-card)', border: '1px solid var(--border-light)',
         borderRadius: '16px', padding: '24px',
@@ -256,7 +353,7 @@ export default function AdminPage() {
           管理者ダッシュボード
         </h1>
         <p style={{ color: 'var(--text-muted)', marginBottom: '32px', fontSize: '13px' }}>
-          全サロンの登録状況・予約数・売上を確認できます
+          全サロンの登録状況・予約数・売上・年代分布を確認できます
         </p>
 
         {loading ? (

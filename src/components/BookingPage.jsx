@@ -11,6 +11,19 @@ function getTodayStr() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
+function calcAgeGroup(birthdate) {
+  if (!birthdate) return null
+  const today = new Date()
+  const birth = new Date(birthdate)
+  let age = today.getFullYear() - birth.getFullYear()
+  const md = today.getMonth() - birth.getMonth()
+  if (md < 0 || (md === 0 && today.getDate() < birth.getDate())) age--
+  if (age < 0 || age > 120) return null
+  if (age < 10) return '10歳未満'
+  if (age >= 70) return '70代以上'
+  return `${Math.floor(age / 10) * 10}代`
+}
+
 function timeToMins(t) {
   const [h, m] = t.split(':').map(Number)
   return h * 60 + m
@@ -84,10 +97,13 @@ async function fetchPublicAppointmentsByDate(date) {
   }))
 }
 
-async function createPublicBooking({ name, phone, email, notes, menuId, staffId, date, time, duration }) {
+async function createPublicBooking({ name, phone, email, notes, birthdate, menuId, staffId, date, time, duration }) {
   const { data: customer, error: ce } = await supabase
     .from('customers')
-    .insert({ name, phone, email: email || '', notes: notes || '', visit_count: 0 })
+    .insert({
+      name, phone, email: email || '', notes: notes || '', visit_count: 0,
+      birthdate: birthdate || null,
+    })
     .select('id')
     .single()
   if (ce) throw ce
@@ -310,13 +326,16 @@ function ContactStep({ menu, selectedDate, selectedTime, onBack, onSubmit, submi
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
+  const [birthdate, setBirthdate] = useState('')
   const [notes, setNotes] = useState('')
   const [error, setError] = useState(null)
+
+  const ageGroup = calcAgeGroup(birthdate)
 
   const handleSubmit = async () => {
     setError(null)
     try {
-      await onSubmit({ name, phone, email, notes })
+      await onSubmit({ name, phone, email, birthdate, notes })
     } catch (e) {
       setError(e.message)
     }
@@ -367,6 +386,29 @@ function ContactStep({ menu, selectedDate, selectedTime, onBack, onSubmit, submi
           onChange={e => setEmail(e.target.value)}
           placeholder="example@email.com"
         />
+      </div>
+      <div style={s.field}>
+        <label style={s.fieldLabel}>生年月日（任意）</label>
+        <input
+          type="date"
+          style={s.input}
+          value={birthdate}
+          max={getTodayStr()}
+          onChange={e => setBirthdate(e.target.value)}
+        />
+        {ageGroup && (
+          <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>年代：</span>
+            <span style={{
+              fontSize: '13px', fontWeight: 700, color: 'var(--gold)',
+              background: 'rgba(201,169,110,0.12)',
+              border: '1px solid rgba(201,169,110,0.35)',
+              borderRadius: '20px', padding: '2px 12px',
+            }}>
+              {ageGroup}
+            </span>
+          </div>
+        )}
       </div>
       <div style={s.field}>
         <label style={s.fieldLabel}>ご要望・メモ（任意）</label>
@@ -446,6 +488,14 @@ function DoneStep({ menu, selectedDate, selectedTime, bookingInfo, apptId, apptP
             <span style={s.summaryValue}>{bookingInfo.email}</span>
           </div>
         )}
+        {bookingInfo?.ageGroup && (
+          <div style={s.summaryRow}>
+            <span style={s.summaryLabel}>年代</span>
+            <span style={{ ...s.summaryValue, color: 'var(--gold)', fontWeight: 700 }}>
+              {bookingInfo.ageGroup}
+            </span>
+          </div>
+        )}
         <div style={s.summaryRow}>
           <span style={s.summaryLabel}>メニュー</span>
           <span style={s.summaryValue}>{menu?.name}（{fmtPrice(menu?.price)} · {menu?.duration}分）</span>
@@ -509,7 +559,7 @@ export default function BookingPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  const handleSubmit = async ({ name, phone, email, notes }) => {
+  const handleSubmit = async ({ name, phone, email, birthdate, notes }) => {
     setSubmitting(true)
     try {
       const appointments = await fetchPublicAppointmentsByDate(selectedDate)
@@ -518,14 +568,14 @@ export default function BookingPage() {
       const staffId = available.length > 0 ? available[0] : (staff[0]?.id ?? null)
 
       const appt = await createPublicBooking({
-        name, phone, email, notes,
+        name, phone, email, birthdate, notes,
         menuId: selectedMenu.id,
         staffId,
         date: selectedDate,
         time: selectedTime,
         duration: selectedMenu.duration,
       })
-      setBookingInfo({ name, phone, email })
+      setBookingInfo({ name, phone, email, ageGroup: calcAgeGroup(birthdate) })
       setApptId(appt.id)
       setApptPublicId(appt.public_id)
       setStep('done')

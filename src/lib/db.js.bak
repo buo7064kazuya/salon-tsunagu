@@ -1,41 +1,50 @@
 import { supabase } from './supabase'
 
-function calcAgeGroup(birthdate) {
-  if (!birthdate) return null
-  const today = new Date()
-  const birth = new Date(birthdate)
-  let age = today.getFullYear() - birth.getFullYear()
-  const md = today.getMonth() - birth.getMonth()
-  if (md < 0 || (md === 0 && today.getDate() < birth.getDate())) age--
-  if (age < 0 || age > 120) return null
-  if (age < 10) return '10歳未満'
-  if (age >= 70) return '70代以上'
-  return `${Math.floor(age / 10) * 10}代`
-}
-
+// snake_case (DB) <-> camelCase (app) 変換
 const toAppAppointment = r => ({
-  id: r.id, publicId: r.public_id, customerId: r.customer_id,
-  staffId: r.staff_id, menuId: r.menu_id, date: r.date,
-  time: r.time, duration: r.duration, notes: r.notes, status: r.status,
+  id: r.id,
+  publicId: r.public_id,
+  customerId: r.customer_id,
+  staffId: r.staff_id,
+  menuId: r.menu_id,
+  date: r.date,
+  time: r.time,
+  duration: r.duration,
+  notes: r.notes,
+  status: r.status,
 })
 
 const toDbAppointment = a => ({
-  customer_id: a.customerId, staff_id: a.staffId, menu_id: a.menuId,
-  date: a.date, time: a.time, duration: a.duration, notes: a.notes, status: a.status,
+  customer_id: a.customerId,
+  staff_id: a.staffId,
+  menu_id: a.menuId,
+  date: a.date,
+  time: a.time,
+  duration: a.duration,
+  notes: a.notes,
+  status: a.status,
 })
 
 const toAppCustomer = r => ({
-  id: r.id, name: r.name, phone: r.phone, email: r.email,
-  notes: r.notes, visitCount: r.visit_count,
-  birthdate: r.birthdate ?? null, ageGroup: r.age_group ?? null,
+  id: r.id,
+  name: r.name,
+  phone: r.phone,
+  email: r.email,
+  notes: r.notes,
+  visitCount: r.visit_count,
+  birthdate: r.birthdate ?? null,
 })
 
 const toDbCustomer = c => ({
-  name: c.name, phone: c.phone, email: c.email, notes: c.notes,
-  visit_count: c.visitCount, birthdate: c.birthdate || null,
-  age_group: c.birthdate ? calcAgeGroup(c.birthdate) : null,
+  name: c.name,
+  phone: c.phone,
+  email: c.email,
+  notes: c.notes,
+  visit_count: c.visitCount,
+  birthdate: c.birthdate || null,
 })
 
+// ==================== STAFF ====================
 export async function fetchStaff() {
   const { data, error } = await supabase.from('staff').select('*').order('id')
   if (error) throw error
@@ -60,6 +69,7 @@ export async function deleteStaff(id) {
   if (error) throw error
 }
 
+// ==================== MENUS ====================
 export async function fetchMenus() {
   const { data, error } = await supabase.from('menus').select('*').order('id')
   if (error) throw error
@@ -84,6 +94,7 @@ export async function deleteMenu(id) {
   if (error) throw error
 }
 
+// ==================== CUSTOMERS ====================
 export async function fetchCustomers() {
   const { data, error } = await supabase.from('customers').select('*').order('id')
   if (error) throw error
@@ -108,6 +119,7 @@ export async function deleteCustomer(id) {
   if (error) throw error
 }
 
+// ==================== APPOINTMENTS ====================
 export async function fetchAppointments() {
   const { data, error } = await supabase.from('appointments').select('*').order('date').order('time')
   if (error) throw error
