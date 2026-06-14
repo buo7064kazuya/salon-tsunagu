@@ -84,10 +84,10 @@ async function fetchPublicAppointmentsByDate(date) {
   }))
 }
 
-async function createPublicBooking({ name, phone, notes, menuId, staffId, date, time, duration }) {
+async function createPublicBooking({ name, phone, email, notes, menuId, staffId, date, time, duration }) {
   const { data: customer, error: ce } = await supabase
     .from('customers')
-    .insert({ name, phone, email: '', notes: notes || '', visit_count: 0 })
+    .insert({ name, phone, email: email || '', notes: notes || '', visit_count: 0 })
     .select('id')
     .single()
   if (ce) throw ce
@@ -309,13 +309,14 @@ function DateTimeStep({ menu, staff, selectedDate, setSelectedDate, selectedTime
 function ContactStep({ menu, selectedDate, selectedTime, onBack, onSubmit, submitting }) {
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
+  const [email, setEmail] = useState('')
   const [notes, setNotes] = useState('')
   const [error, setError] = useState(null)
 
   const handleSubmit = async () => {
     setError(null)
     try {
-      await onSubmit({ name, phone, notes })
+      await onSubmit({ name, phone, email, notes })
     } catch (e) {
       setError(e.message)
     }
@@ -355,6 +356,16 @@ function ContactStep({ menu, selectedDate, selectedTime, onBack, onSubmit, submi
           value={phone}
           onChange={e => setPhone(e.target.value)}
           placeholder="090-0000-0000"
+        />
+      </div>
+      <div style={s.field}>
+        <label style={s.fieldLabel}>メールアドレス（任意）</label>
+        <input
+          type="email"
+          style={s.input}
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+          placeholder="example@email.com"
         />
       </div>
       <div style={s.field}>
@@ -429,6 +440,12 @@ function DoneStep({ menu, selectedDate, selectedTime, bookingInfo, apptId, onRes
           <span style={s.summaryLabel}>電話番号</span>
           <span style={s.summaryValue}>{bookingInfo?.phone}</span>
         </div>
+        {bookingInfo?.email && (
+          <div style={s.summaryRow}>
+            <span style={s.summaryLabel}>メール</span>
+            <span style={s.summaryValue}>{bookingInfo.email}</span>
+          </div>
+        )}
         <div style={s.summaryRow}>
           <span style={s.summaryLabel}>メニュー</span>
           <span style={s.summaryValue}>{menu?.name}（{fmtPrice(menu?.price)} · {menu?.duration}分）</span>
@@ -478,7 +495,7 @@ export default function BookingPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  const handleSubmit = async ({ name, phone, notes }) => {
+  const handleSubmit = async ({ name, phone, email, notes }) => {
     setSubmitting(true)
     try {
       const appointments = await fetchPublicAppointmentsByDate(selectedDate)
@@ -487,14 +504,14 @@ export default function BookingPage() {
       const staffId = available.length > 0 ? available[0] : (staff[0]?.id ?? null)
 
       const appt = await createPublicBooking({
-        name, phone, notes,
+        name, phone, email, notes,
         menuId: selectedMenu.id,
         staffId,
         date: selectedDate,
         time: selectedTime,
         duration: selectedMenu.duration,
       })
-      setBookingInfo({ name, phone })
+      setBookingInfo({ name, phone, email })
       setApptId(appt.id)
       setStep('done')
     } finally {
