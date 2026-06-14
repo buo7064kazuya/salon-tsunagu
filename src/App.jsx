@@ -62,6 +62,16 @@ const NAV = [
 ]
 
 function Sidebar({ page, setPage, user, onSignOut }) {
+  const [copied, setCopied] = useState(false)
+
+  const copyBookingUrl = () => {
+    const url = `${window.location.origin}/book/${user?.id}`
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
@@ -87,6 +97,19 @@ function Sidebar({ page, setPage, user, onSignOut }) {
         <div style={{ fontSize: '11px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {user?.email}
         </div>
+        <button
+          onClick={copyBookingUrl}
+          style={{
+            background: copied ? 'rgba(92,184,92,0.12)' : 'var(--gold-dim)',
+            border: `1px solid ${copied ? 'rgba(92,184,92,0.4)' : 'rgba(201,169,110,0.3)'}`,
+            color: copied ? '#5CB85C' : 'var(--gold)',
+            borderRadius: '6px', padding: '6px 10px', fontSize: '11px',
+            cursor: 'pointer', textAlign: 'left', transition: 'background 0.2s, color 0.2s, border-color 0.2s',
+            fontWeight: 600, letterSpacing: '0.02em',
+          }}
+        >
+          {copied ? '✓ コピーしました' : '予約ページURLをコピー'}
+        </button>
         <button
           onClick={onSignOut}
           style={{ background: 'none', border: '1px solid var(--border-light)', color: 'var(--text-muted)', borderRadius: '6px', padding: '5px 10px', fontSize: '12px', cursor: 'pointer', textAlign: 'left', transition: 'border-color 0.15s, color 0.15s' }}
