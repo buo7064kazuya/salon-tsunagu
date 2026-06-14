@@ -127,6 +127,30 @@ function AgeGroupChart({ salons }) {
   )
 }
 
+// ==================== CSV EXPORT ====================
+function buildCsv(rows) {
+  const escape = v => {
+    const s = v == null ? '' : String(v)
+    return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s
+  }
+  const headers = ['名前', '予約日', '予約時間', 'メニュー', '年代', '新規/継続', '電話番号', 'メールアドレス', 'メモ', '来店回数']
+  const lines = [headers, ...rows.map(r => [
+    r.name, r.appt_date, r.appt_time, r.menu_name,
+    r.age_group, r.customer_type, r.phone, r.email, r.notes, r.visit_count,
+  ])]
+  return '﻿' + lines.map(r => r.map(escape).join(',')).join('\r\n')
+}
+
+function triggerDownload(csv, filename) {
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 // ==================== SALON TABLE ====================
 function SalonTable({ salons }) {
   const headers = ['サロン', '登録日', '顧客数', 'スタッフ数', '今月の予約', '今月の売上', '累計予約', '累計売上']
@@ -140,25 +164,82 @@ function SalonTable({ salons }) {
   }
 
   return (
-    <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-        <thead>
-          <tr style={{ borderBottom: '1px solid var(--border-light)' }}>
-            {headers.map(h => (
-              <th key={h} style={{
-                textAlign: h === 'サロン' || h === '登録日' ? 'left' : 'right',
-                padding: '10px 14px', fontSize: '11px', color: 'var(--text-muted)',
-                fontWeight: 600, whiteSpace: 'nowrap', letterSpacing: '0.03em',
-              }}>{h}</th>
+    <div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid var(--border-light)' }}>
+              {headers.map((h, i) => (
+                <th key={i} style={{
+                  textAlign: i < 2 ? 'left' : 'right',
+                  padding: '10px 14px', fontSize: '11px', color: 'var(--text-muted)',
+                  fontWeight: 600, whiteSpace: 'nowrap', letterSpacing: '0.03em',
+                }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {salons.map(s => (
+              <SalonRow key={s.salon_id} s={s} />
             ))}
-          </tr>
-        </thead>
-        <tbody>
-          {salons.map(s => (
-            <SalonRow key={s.salon_id} s={s} />
-          ))}
-        </tbody>
-      </table>
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--border-light)' }}>
+        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '10px', letterSpacing: '0.04em' }}>
+          顧客データ書き出し（CSV）
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+          {salons.map(s => <SalonExportButton key={s.salon_id} s={s} />)}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SalonExportButton({ s }) {
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState(null)
+
+  async function handleExport() {
+    setExporting(true)
+    setExportError(null)
+    try {
+      const { data, error } = await supabase.rpc('get_salon_customers', { p_salon_id: s.salon_id })
+      if (error) throw error
+      if (!data || data.length === 0) {
+        setExportError('予約データがありません')
+        return
+      }
+      const date = new Date().toISOString().slice(0, 10)
+      triggerDownload(buildCsv(data), `customers_${s.salon_email || s.salon_id}_${date}.csv`)
+    } catch (err) {
+      setExportError(err.message || 'エラーが発生しました')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+      <button
+        onClick={handleExport}
+        disabled={exporting}
+        style={{
+          background: 'transparent',
+          border: '1px solid rgba(201,169,110,0.4)',
+          color: 'var(--gold)',
+          borderRadius: '6px', padding: '6px 14px',
+          fontSize: '12px', cursor: 'pointer', whiteSpace: 'nowrap',
+          transition: 'background 0.15s',
+        }}
+      >
+        {exporting ? '取得中...' : `${s.salon_email || s.salon_id} — CSV書き出し`}
+      </button>
+      {exportError && (
+        <span style={{ fontSize: '11px', color: '#E05C5C' }}>{exportError}</span>
+      )}
     </div>
   )
 }
