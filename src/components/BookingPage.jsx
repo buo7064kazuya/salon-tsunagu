@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 // ===== HELPERS =====
 const pad = n => String(n).padStart(2, '0')
 const fmtPrice = n => `¥${Number(n).toLocaleString()}`
+const fmtTime = t => t ? t.replace(/^0/, '') : ''
 
 function getTodayStr() {
   const d = new Date()
@@ -309,12 +310,12 @@ function DateTimeStep({ menu, staff, salonId, selectedDate, setSelectedDate, sel
       {/* Calendar */}
       <div style={s.calBox}>
         <div style={s.calNav}>
-          <button style={s.iconBtn} onClick={() => setCalDate(new Date(y, mo - 1, 1))}>‹</button>
+          <button style={s.iconBtn} onClick={() => setCalDate(d => new Date(d.getFullYear(), d.getMonth() - 1, 1))}>‹</button>
           <span style={s.calNavTitle}>{y}年 {MONTHS_JP[mo]}</span>
           <button
             style={{ ...s.iconBtn, ...(!canGoNext ? { opacity: 0.3, cursor: 'not-allowed' } : {}) }}
             disabled={!canGoNext}
-            onClick={() => canGoNext && setCalDate(new Date(y, mo + 1, 1))}
+            onClick={() => setCalDate(d => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
           >›</button>
         </div>
         <div style={s.dowRow}>
@@ -390,7 +391,7 @@ function DateTimeStep({ menu, staff, salonId, selectedDate, setSelectedDate, sel
                     }}
                     onClick={() => setSelectedTime(slot)}
                   >
-                    {slot}
+                    {fmtTime(slot)}
                   </button>
                 )
               })}
@@ -444,7 +445,7 @@ function ContactStep({ menu, selectedDate, selectedTime, onBack, onSubmit, submi
         </div>
         <div style={{ ...s.summaryRow, marginBottom: 0 }}>
           <span style={s.summaryLabel}>日時</span>
-          <span style={s.summaryValue}>{fmtDateLabel(selectedDate)}　{selectedTime}</span>
+          <span style={s.summaryValue}>{fmtDateLabel(selectedDate)}　{fmtTime(selectedTime)}</span>
         </div>
       </div>
 
@@ -594,7 +595,7 @@ function DoneStep({ menu, selectedDate, selectedTime, bookingInfo, apptId, apptP
         </div>
         <div style={s.summaryRow}>
           <span style={s.summaryLabel}>日時</span>
-          <span style={s.summaryValue}>{fmtDateLabel(selectedDate)}　{selectedTime}〜</span>
+          <span style={s.summaryValue}>{fmtDateLabel(selectedDate)}　{fmtTime(selectedTime)}〜</span>
         </div>
         <div style={{ ...s.summaryRow, marginBottom: 0 }}>
           <span style={s.summaryLabel}>ステータス</span>
