@@ -133,9 +133,10 @@ function buildCsv(rows) {
     const s = v == null ? '' : String(v)
     return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s
   }
-  const headers = ['名前', '予約日', '予約時間', 'メニュー', '年代', '新規/継続', '電話番号', 'メールアドレス', 'メモ', '来店回数']
+  const headers = ['名前', '予約日', '予約時間', 'メニュー', '料金', '年代', '新規/継続', '電話番号', 'メールアドレス', 'メモ', '来店回数']
   const lines = [headers, ...rows.map(r => [
     r.name, r.appt_date, r.appt_time, r.menu_name,
+    r.menu_price != null ? r.menu_price : '',
     r.age_group, r.customer_type, r.phone, r.email, r.notes, r.visit_count,
   ])]
   return '﻿' + lines.map(r => r.map(escape).join(',')).join('\r\n')
@@ -153,7 +154,7 @@ function triggerDownload(csv, filename) {
 
 // ==================== SALON TABLE ====================
 function SalonTable({ salons }) {
-  const headers = ['サロン', '登録日', '顧客数', 'スタッフ数', '今月の予約', '今月の売上', '累計予約', '累計売上']
+  const headers = ['サロン', '登録日', '顧客数', 'スタッフ数', '今月の予約', '今月の売上', '累計予約', '累計売上', '']
 
   if (!salons || salons.length === 0) {
     return (
@@ -279,6 +280,21 @@ function SalonRow({ s }) {
       <td style={{ padding: '14px', color: 'var(--text-muted)', textAlign: 'right' }}>{s.total_appointments}</td>
       <td style={{ padding: '14px', color: 'var(--text-muted)', textAlign: 'right', whiteSpace: 'nowrap' }}>
         {fmtPrice(s.total_revenue)}
+      </td>
+      <td style={{ padding: '14px', textAlign: 'right' }}>
+        <a
+          href={`/book/${s.salon_id}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            color: 'var(--gold)', fontSize: '12px', textDecoration: 'none',
+            border: '1px solid rgba(201,169,110,0.4)', borderRadius: '6px',
+            padding: '4px 10px', whiteSpace: 'nowrap',
+            transition: 'background 0.15s',
+          }}
+        >
+          予約ページ
+        </a>
       </td>
     </tr>
   )
