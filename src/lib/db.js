@@ -157,10 +157,10 @@ export async function fetchWeeklyBlocks() {
   return data
 }
 
-export async function addWeeklyBlock(dayOfWeek, startTime, endTime, reason) {
+export async function addWeeklyBlock(dayOfWeek, startTime, endTime, reason, weekOfMonth = null) {
   const { data, error } = await supabase
     .from('weekly_blocks')
-    .insert({ day_of_week: dayOfWeek, start_time: startTime || null, end_time: endTime || null, reason: reason || null })
+    .insert({ day_of_week: dayOfWeek, start_time: startTime || null, end_time: endTime || null, reason: reason || null, week_of_month: weekOfMonth || null })
     .select().single()
   if (error) throw error
   return data

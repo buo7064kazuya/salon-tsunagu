@@ -226,7 +226,7 @@ function DateTimeStep({ menu, staff, salonId, selectedDate, setSelectedDate, sel
     if (!salonId) return
     Promise.all([
       supabase.from('blocked_dates').select('date, time, end_time').eq('salon_id', salonId),
-      supabase.from('weekly_blocks').select('day_of_week, start_time, end_time').eq('salon_id', salonId),
+      supabase.from('weekly_blocks').select('day_of_week, start_time, end_time, week_of_month').eq('salon_id', salonId),
     ]).then(([bd, wb]) => {
       setBlockedDates(bd.data || [])
       setWeeklyBlocks(wb.data || [])
@@ -243,11 +243,6 @@ function DateTimeStep({ menu, staff, salonId, selectedDate, setSelectedDate, sel
       .finally(() => setLoadingSlots(false))
   }, [selectedDate])
 
-  const allDayWeeklyDows = useMemo(
-    () => new Set(weeklyBlocks.filter(b => !b.start_time).map(b => b.day_of_week)),
-    [weeklyBlocks]
-  )
-
   const slots = useMemo(() => generateSlots(menu.duration), [menu.duration])
   const staffIds = useMemo(() => staff.map(st => st.id), [staff])
 
@@ -263,8 +258,10 @@ function DateTimeStep({ menu, staff, salonId, selectedDate, setSelectedDate, sel
 
   const weeklyBlocksForDow = useMemo(() => {
     if (!selectedDate) return []
-    const dow = new Date(selectedDate + 'T12:00:00').getDay()
-    return weeklyBlocks.filter(b => b.day_of_week === dow)
+    const d = new Date(selectedDate + 'T12:00:00')
+    const dow = d.getDay()
+    const weekOfMonth = Math.ceil(d.getDate() / 7)
+    return weeklyBlocks.filter(b => b.day_of_week === dow && (b.week_of_month == null || b.week_of_month === weekOfMonth))
   }, [weeklyBlocks, selectedDate])
 
   const availMap = useMemo(() => {
@@ -332,9 +329,11 @@ function DateTimeStep({ menu, staff, salonId, selectedDate, setSelectedDate, sel
             if (!day) return <div key={`e${i}`} />
             const ds = `${y}-${pad(mo + 1)}-${pad(day)}`
             const dow = (firstDOW + day - 1) % 7
+            const weekOfMonth = Math.ceil(day / 7)
             const isPast    = ds < TODAY
             const isFuture  = ds > maxDateStr
-            const isBlocked = blockedDates.some(b => b.date === ds && !b.time) || allDayWeeklyDows.has(dow)
+            const isBlocked = blockedDates.some(b => b.date === ds && !b.time) ||
+              weeklyBlocks.some(b => b.day_of_week === dow && !b.start_time && (b.week_of_month == null || b.week_of_month === weekOfMonth))
             const disabled  = isPast || isFuture || isBlocked
             const isSelected = ds === selectedDate
             const isToday = ds === TODAY

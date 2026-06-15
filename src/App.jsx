@@ -901,8 +901,17 @@ const WEEK_TIME_OPTIONS = (() => {
   return opts
 })()
 
+const WEEK_OF_MONTH_OPTIONS = [
+  { value: 0, label: '毎週' },
+  { value: 1, label: '第1週' },
+  { value: 2, label: '第2週' },
+  { value: 3, label: '第3週' },
+  { value: 4, label: '第4週' },
+]
+
 function WeeklyBlocksPage({ weeklyBlocks, onAdd, onRemove }) {
   const [dow, setDow] = useState(1)
+  const [weekOfMonth, setWeekOfMonth] = useState(0)
   const [allDay, setAllDay] = useState(true)
   const [startTime, setStartTime] = useState('09:00')
   const [endTime, setEndTime] = useState('10:00')
@@ -916,7 +925,7 @@ function WeeklyBlocksPage({ weeklyBlocks, onAdd, onRemove }) {
     setAdding(true)
     setAddError(null)
     try {
-      await onAdd(Number(dow), allDay ? null : startTime, allDay ? null : endTime, reason)
+      await onAdd(Number(dow), allDay ? null : startTime, allDay ? null : endTime, reason, weekOfMonth > 0 ? weekOfMonth : null)
       setReason('')
     } catch (e) {
       setAddError(e.message)
@@ -937,6 +946,14 @@ function WeeklyBlocksPage({ weeklyBlocks, onAdd, onRemove }) {
       <div className="card" style={{ marginBottom: '20px' }}>
         <div className="card-header"><h2 className="card-title">定期ブロックを追加</h2></div>
         <div style={{ display: 'flex', gap: '10px', marginTop: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <select
+            className="input-field"
+            value={weekOfMonth}
+            onChange={e => setWeekOfMonth(Number(e.target.value))}
+            style={{ width: 'auto' }}
+          >
+            {WEEK_OF_MONTH_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
           <select
             className="input-field"
             value={dow}
@@ -1000,11 +1017,14 @@ function WeeklyBlocksPage({ weeklyBlocks, onAdd, onRemove }) {
         ) : (
           <table className="data-table">
             <thead>
-              <tr><th>曜日</th><th>時間帯</th><th>理由</th><th /></tr>
+              <tr><th>週</th><th>曜日</th><th>時間帯</th><th>理由</th><th /></tr>
             </thead>
             <tbody>
               {weeklyBlocks.map(b => (
                 <tr key={b.id} className="table-row">
+                  <td style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
+                    {b.week_of_month ? `第${b.week_of_month}週` : '毎週'}
+                  </td>
                   <td style={{ fontWeight: 600 }}>{DAYS_JP_FULL[b.day_of_week]}</td>
                   <td style={{ color: b.start_time ? 'var(--gold)' : 'var(--text-muted)', fontWeight: b.start_time ? 600 : 400 }}>
                     {b.start_time ? `${b.start_time.slice(0, 5)}〜${b.end_time.slice(0, 5)}` : '終日'}
@@ -1526,9 +1546,9 @@ export default function App() {
     setBlockedDates(p => p.filter(b => b.id !== id))
   }
 
-  const handleAddWeekly = async (dow, startTime, endTime, reason) => {
-    const saved = await addWeeklyBlock(dow, startTime, endTime, reason)
-    setWeeklyBlocks(p => [...p, saved].sort((a, b) => a.day_of_week - b.day_of_week || (a.start_time || '').localeCompare(b.start_time || '')))
+  const handleAddWeekly = async (dow, startTime, endTime, reason, weekOfMonth) => {
+    const saved = await addWeeklyBlock(dow, startTime, endTime, reason, weekOfMonth)
+    setWeeklyBlocks(p => [...p, saved].sort((a, b) => a.day_of_week - b.day_of_week || (a.week_of_month ?? 0) - (b.week_of_month ?? 0) || (a.start_time || '').localeCompare(b.start_time || '')))
   }
   const handleRemoveWeekly = async id => {
     await dbRemoveWeeklyBlock(id)
