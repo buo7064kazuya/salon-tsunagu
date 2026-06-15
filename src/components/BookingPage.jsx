@@ -225,7 +225,7 @@ function DateTimeStep({ menu, staff, salonId, selectedDate, setSelectedDate, sel
   useEffect(() => {
     if (!salonId) return
     Promise.all([
-      supabase.from('blocked_dates').select('date, time').eq('salon_id', salonId),
+      supabase.from('blocked_dates').select('date, time, end_time').eq('salon_id', salonId),
       supabase.from('weekly_blocks').select('day_of_week, start_time, end_time').eq('salon_id', salonId),
     ]).then(([bd, wb]) => {
       setBlockedDates(bd.data || [])
@@ -251,13 +251,14 @@ function DateTimeStep({ menu, staff, salonId, selectedDate, setSelectedDate, sel
   const slots = useMemo(() => generateSlots(menu.duration), [menu.duration])
   const staffIds = useMemo(() => staff.map(st => st.id), [staff])
 
-  const blockedTimesForDate = useMemo(() => {
-    if (!selectedDate) return new Set()
-    return new Set(
-      blockedDates
-        .filter(b => b.date === selectedDate && b.time)
-        .map(b => b.time.slice(0, 5))
-    )
+  const blockedRangesForDate = useMemo(() => {
+    if (!selectedDate) return []
+    return blockedDates
+      .filter(b => b.date === selectedDate && b.time)
+      .map(b => ({
+        start: timeToMins(b.time.slice(0, 5)),
+        end: b.end_time ? timeToMins(b.end_time.slice(0, 5)) : timeToMins(b.time.slice(0, 5)) + 15,
+      }))
   }, [blockedDates, selectedDate])
 
   const weeklyBlocksForDow = useMemo(() => {
@@ -280,8 +281,9 @@ function DateTimeStep({ menu, staff, salonId, selectedDate, setSelectedDate, sel
         map[slot] = []
         return
       }
-      // 日付指定の時間ブロック
-      if (blockedTimesForDate.has(slot)) {
+      // 日付指定の時間ブロック（範囲対応）
+      const slotMins = timeToMins(slot)
+      if (blockedRangesForDate.some(r => slotMins >= r.start && slotMins < r.end)) {
         map[slot] = []
         return
       }
@@ -301,7 +303,7 @@ function DateTimeStep({ menu, staff, salonId, selectedDate, setSelectedDate, sel
       map[slot] = getAvailableStaffIds(slot, menu.duration, appointments, staffIds)
     })
     return map
-  }, [slots, menu.duration, appointments, staffIds, selectedDate, nowMins, blockedTimesForDate, weeklyBlocksForDow])
+  }, [slots, menu.duration, appointments, staffIds, selectedDate, nowMins, blockedRangesForDate, weeklyBlocksForDow])
 
   return (
     <>

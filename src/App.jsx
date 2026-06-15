@@ -743,29 +743,34 @@ function MenusPage({ menus, openModal }) {
 
 // ==================== BLOCKED DATES PAGE ====================
 const BLOCK_TIME_OPTIONS = (() => {
-  const opts = [{ value: '', label: '終日（全時間）' }]
-  for (let h = 9; h < 19; h++) {
-    opts.push({ value: `${pad(h)}:00`, label: `${pad(h)}:00` })
-    opts.push({ value: `${pad(h)}:30`, label: `${pad(h)}:30` })
+  const opts = []
+  for (let m = 9 * 60; m <= 19 * 60; m += 15) {
+    const h = Math.floor(m / 60), min = m % 60
+    const val = `${pad(h)}:${pad(min)}`
+    opts.push({ value: val, label: val })
   }
   return opts
 })()
 
 function BlockedDatesPage({ blockedDates, onAdd, onRemove }) {
   const [date, setDate] = useState('')
-  const [time, setTime] = useState('')
+  const [allDay, setAllDay] = useState(true)
+  const [startTime, setStartTime] = useState('09:00')
+  const [endTime, setEndTime] = useState('10:00')
   const [reason, setReason] = useState('')
   const [adding, setAdding] = useState(false)
   const [addError, setAddError] = useState(null)
+
+  const validEndOptions = BLOCK_TIME_OPTIONS.filter(o => o.value > startTime)
 
   const handleAdd = async () => {
     if (!date) return
     setAdding(true)
     setAddError(null)
     try {
-      await onAdd(date, time || null, reason)
+      await onAdd(date, allDay ? null : startTime, allDay ? null : endTime, reason)
       setDate('')
-      setTime('')
+      setAllDay(true)
       setReason('')
     } catch (e) {
       setAddError(e.message)
@@ -780,7 +785,7 @@ function BlockedDatesPage({ blockedDates, onAdd, onRemove }) {
         <h1 className="page-title">休業日・ブロック設定</h1>
       </div>
       <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '20px' }}>
-        終日を選ぶとその日丸ごと、時間を指定するとその時間帯のみ予約不可になります。
+        終日を選ぶとその日丸ごと、時間帯を指定するとその時間のみ予約不可になります。
       </p>
 
       <div className="card" style={{ marginBottom: '20px' }}>
@@ -794,16 +799,41 @@ function BlockedDatesPage({ blockedDates, onAdd, onRemove }) {
             onChange={e => setDate(e.target.value)}
             style={{ width: 'auto' }}
           />
-          <select
-            className="input-field"
-            value={time}
-            onChange={e => setTime(e.target.value)}
-            style={{ width: 'auto' }}
-          >
-            {BLOCK_TIME_OPTIONS.map(o => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--text)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            <input type="checkbox" checked={allDay} onChange={e => setAllDay(e.target.checked)} />
+            終日
+          </label>
+          {!allDay && (
+            <>
+              <select
+                className="input-field"
+                value={startTime}
+                onChange={e => {
+                  setStartTime(e.target.value)
+                  if (e.target.value >= endTime) {
+                    const next = BLOCK_TIME_OPTIONS.find(o => o.value > e.target.value)
+                    if (next) setEndTime(next.value)
+                  }
+                }}
+                style={{ width: 'auto' }}
+              >
+                {BLOCK_TIME_OPTIONS.slice(0, -1).map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+              <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>〜</span>
+              <select
+                className="input-field"
+                value={endTime}
+                onChange={e => setEndTime(e.target.value)}
+                style={{ width: 'auto' }}
+              >
+                {validEndOptions.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </>
+          )}
           <input
             className="input-field"
             value={reason}
@@ -827,14 +857,16 @@ function BlockedDatesPage({ blockedDates, onAdd, onRemove }) {
         ) : (
           <table className="data-table">
             <thead>
-              <tr><th>日付</th><th>時間</th><th>理由</th><th /></tr>
+              <tr><th>日付</th><th>時間帯</th><th>理由</th><th /></tr>
             </thead>
             <tbody>
               {blockedDates.map(b => (
                 <tr key={b.id} className="table-row">
                   <td style={{ fontWeight: 600 }}>{fmtDate(b.date)}</td>
                   <td style={{ color: b.time ? 'var(--gold)' : 'var(--text-muted)', fontWeight: b.time ? 600 : 400 }}>
-                    {b.time ? b.time.slice(0, 5) : '終日'}
+                    {b.time
+                      ? (b.end_time ? `${b.time.slice(0, 5)}〜${b.end_time.slice(0, 5)}` : b.time.slice(0, 5))
+                      : '終日'}
                   </td>
                   <td style={{ color: 'var(--text-muted)', fontSize: '13px' }}>{b.reason || '-'}</td>
                   <td style={{ textAlign: 'right' }}>
@@ -857,13 +889,14 @@ function BlockedDatesPage({ blockedDates, onAdd, onRemove }) {
 }
 
 // ==================== WEEKLY BLOCKS PAGE ====================
-const DAYS_JP_FULL = ['日曜', '月曜', '火曜', '水曜', '木曜', '金曜', '土曜']
+const DAYS_JP_FULL = ['日曜日', '月曜日', '火曜日', '水曜日', '木曜日', '金曜日', '土曜日']
 
 const WEEK_TIME_OPTIONS = (() => {
   const opts = []
-  for (let h = 9; h <= 19; h++) {
-    opts.push({ value: `${pad(h)}:00`, label: `${pad(h)}:00` })
-    if (h < 19) opts.push({ value: `${pad(h)}:30`, label: `${pad(h)}:30` })
+  for (let m = 9 * 60; m <= 19 * 60; m += 15) {
+    const h = Math.floor(m / 60), min = m % 60
+    const val = `${pad(h)}:${pad(min)}`
+    opts.push({ value: val, label: val })
   }
   return opts
 })()
@@ -1484,8 +1517,8 @@ export default function App() {
     setModal(null)
   }
 
-  const handleAddBlocked = async (date, time, reason) => {
-    const saved = await addBlockedDate(date, time, reason)
+  const handleAddBlocked = async (date, startTime, endTime, reason) => {
+    const saved = await addBlockedDate(date, startTime, endTime, reason)
     setBlockedDates(p => [...p, saved].sort((a, b) => a.date.localeCompare(b.date) || (a.time || '').localeCompare(b.time || '')))
   }
   const handleRemoveBlocked = async id => {
