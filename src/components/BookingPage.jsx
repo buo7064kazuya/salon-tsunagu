@@ -43,7 +43,7 @@ const MONTHS_JP = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月
 
 const SLOT_START_H = 9
 const SLOT_END_H = 19
-const SLOT_INTERVAL = 30
+const SLOT_INTERVAL = 15
 
 function generateSlots(duration) {
   const slots = []
@@ -190,7 +190,8 @@ function MenuStep({ menus, selected, onSelect, onNext }) {
 }
 
 // ===== STEP 2: DATE + TIME =====
-function DateTimeStep({ menu, staff, salonId, selectedDate, setSelectedDate, selectedTime, setSelectedTime, calDate, setCalDate, onBack, onNext }) {
+function DateTimeStep({ menu, staff, salonId, selectedDate, setSelectedDate, selectedTime, setSelectedTime, onBack, onNext }) {
+  const [calDate, setCalDate] = useState(new Date())
   const [appointments, setAppointments] = useState([])
   const [blockedDates, setBlockedDates] = useState([])
   const [weeklyBlocks, setWeeklyBlocks] = useState([])
@@ -637,7 +638,6 @@ export default function BookingPage() {
   const [selectedMenu, setSelectedMenu] = useState(null)
   const [selectedDate, setSelectedDate] = useState(null)
   const [selectedTime, setSelectedTime] = useState(null)
-  const [calDate, setCalDate] = useState(new Date())
   const [submitting, setSubmitting] = useState(false)
   const [bookingInfo, setBookingInfo] = useState(null)
   const [apptId, setApptId] = useState(null)
@@ -680,7 +680,6 @@ export default function BookingPage() {
     setSelectedMenu(null)
     setSelectedDate(null)
     setSelectedTime(null)
-    setCalDate(new Date())
     setBookingInfo(null)
     setApptId(null)
     setApptPublicId(null)
@@ -738,8 +737,6 @@ export default function BookingPage() {
               setSelectedDate={setSelectedDate}
               selectedTime={selectedTime}
               setSelectedTime={setSelectedTime}
-              calDate={calDate}
-              setCalDate={setCalDate}
               onBack={() => setStep('menu')}
               onNext={() => setStep('contact')}
             />
