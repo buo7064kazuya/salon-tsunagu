@@ -150,7 +150,7 @@ const NAV = [
   { id: 'weekly', label: '定期ブロック', icon: '◫' },
 ]
 
-function Sidebar({ page, setPage, user, onSignOut, notifPerm, onRequestNotif }) {
+function Sidebar({ page, setPage, user, onSignOut, notifPerm, onRequestNotif, isOpen, onClose }) {
   const [copied, setCopied] = useState(false)
 
   const copyBookingUrl = () => {
@@ -162,7 +162,7 @@ function Sidebar({ page, setPage, user, onSignOut, notifPerm, onRequestNotif }) 
   }
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar${isOpen ? ' sidebar-open' : ''}`}>
       <div className="sidebar-logo">
         <span className="logo-icon">✦</span>
         <div>
@@ -175,7 +175,7 @@ function Sidebar({ page, setPage, user, onSignOut, notifPerm, onRequestNotif }) 
           <button
             key={item.id}
             className={'nav-item' + (page === item.id ? ' active' : '')}
-            onClick={() => setPage(item.id)}
+            onClick={() => { setPage(item.id); onClose?.() }}
           >
             <span className="nav-icon">{item.icon}</span>
             {item.label}
@@ -1340,6 +1340,7 @@ function StaffForm({ data, onSave, onDelete, onClose }) {
 export default function App() {
   const { session, user, signOut } = useAuth()
   const [page, setPage] = useState('dashboard')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [appointments, setAppointments] = useState([])
   const [customers, setCustomers] = useState([])
   const [menus, setMenus] = useState([])
@@ -1503,14 +1504,23 @@ export default function App() {
 
   const shared = { appointments, customers, menus, staff, openModal }
 
+  const currentPageLabel = NAV.find(n => n.id === page)?.label ?? 'サロンつなぐ'
+
   return (
     <div className="app">
       <Sidebar
         page={page} setPage={setPage} user={user} onSignOut={signOut}
         notifPerm={notifPerm} onRequestNotif={requestNotifPerm}
+        isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)}
       />
+      {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
       {toast && <Toast message={toast} onClose={() => setToast(null)} />}
       <main className="main-content">
+        <div className="mobile-header">
+          <button className="hamburger-btn" onClick={() => setSidebarOpen(true)}>☰</button>
+          <span className="mobile-header-title">サロンつなぐ</span>
+          <span style={{ fontSize: '13px', color: 'var(--text-muted)', marginLeft: 'auto' }}>{currentPageLabel}</span>
+        </div>
         {loading ? (
           <LoadingScreen />
         ) : error ? (

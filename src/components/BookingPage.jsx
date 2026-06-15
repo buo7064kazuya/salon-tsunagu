@@ -327,13 +327,13 @@ function DateTimeStep({ menu, staff, salonId, selectedDate, setSelectedDate, sel
           {cells.map((day, i) => {
             if (!day) return <div key={`e${i}`} />
             const ds = `${y}-${pad(mo + 1)}-${pad(day)}`
+            const dow = (firstDOW + day - 1) % 7
             const isPast    = ds < TODAY
             const isFuture  = ds > maxDateStr
             const isBlocked = blockedDates.some(b => b.date === ds && !b.time) || allDayWeeklyDows.has(dow)
             const disabled  = isPast || isFuture || isBlocked
             const isSelected = ds === selectedDate
             const isToday = ds === TODAY
-            const dow = (firstDOW + day - 1) % 7
             return (
               <button
                 key={day}
