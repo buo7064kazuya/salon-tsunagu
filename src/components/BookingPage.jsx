@@ -62,7 +62,7 @@ function getAvailableStaffIds(slot, duration, appointments, allStaffIds) {
       .filter(a => a.staffId === sid)
       .some(a => {
         const aStart = timeToMins(a.time)
-        const aEnd = aStart + Number(a.duration)
+        const aEnd = aStart + Number(a.duration) + 15
         return slotStart < aEnd && slotEnd > aStart
       })
   })
