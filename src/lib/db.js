@@ -170,3 +170,40 @@ export async function removeWeeklyBlock(id) {
   const { error } = await supabase.from('weekly_blocks').delete().eq('id', id)
   if (error) throw error
 }
+
+// ==================== ADMIN PREVIEW ====================
+export async function adminFetchStaff(salonId) {
+  const { data, error } = await supabase.rpc('admin_get_staff', { p_salon_id: salonId })
+  if (error) throw error
+  return data
+}
+
+export async function adminFetchMenus(salonId) {
+  const { data, error } = await supabase.rpc('admin_get_menus', { p_salon_id: salonId })
+  if (error) throw error
+  return data
+}
+
+export async function adminFetchCustomers(salonId) {
+  const { data, error } = await supabase.rpc('admin_get_customers', { p_salon_id: salonId })
+  if (error) throw error
+  return data.map(toAppCustomer)
+}
+
+export async function adminFetchAppointments(salonId) {
+  const { data, error } = await supabase.rpc('admin_get_appointments', { p_salon_id: salonId })
+  if (error) throw error
+  return data.map(toAppAppointment)
+}
+
+export async function adminFetchBlockedDates(salonId) {
+  const { data, error } = await supabase.rpc('admin_get_blocked_dates', { p_salon_id: salonId })
+  if (error) throw error
+  return data
+}
+
+export async function adminFetchWeeklyBlocks(salonId) {
+  const { data, error } = await supabase.rpc('admin_get_weekly_blocks', { p_salon_id: salonId })
+  if (error) throw error
+  return data
+}

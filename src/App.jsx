@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useLocation } from 'react-router-dom'
 import './App.css'
 import {
   fetchStaff, upsertStaff, deleteStaff as dbDeleteStaff,
@@ -7,6 +8,8 @@ import {
   fetchAppointments, upsertAppointment, deleteAppointment as dbDeleteAppointment,
   fetchBlockedDates, addBlockedDate, removeBlockedDate as dbRemoveBlockedDate,
   fetchWeeklyBlocks, addWeeklyBlock, removeWeeklyBlock as dbRemoveWeeklyBlock,
+  adminFetchStaff, adminFetchMenus, adminFetchCustomers,
+  adminFetchAppointments, adminFetchBlockedDates, adminFetchWeeklyBlocks,
 } from './lib/db'
 import { supabase } from './lib/supabase'
 import { useAuth } from './lib/AuthContext'
@@ -1392,6 +1395,11 @@ function StaffForm({ data, onSave, onDelete, onClose }) {
 // ==================== ROOT APP ====================
 export default function App() {
   const { session, user, signOut } = useAuth()
+  const location = useLocation()
+  const previewMatch = location.pathname.match(/^\/admin\/salon\/([^/]+)$/)
+  const previewSalonId = previewMatch ? previewMatch[1] : null
+  const isPreview = !!previewSalonId
+
   const [page, setPage] = useState('dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [appointments, setAppointments] = useState([])
@@ -1420,14 +1428,23 @@ export default function App() {
     setLoading(true)
     setError(null)
     try {
-      const [s, m, c, a, bd, wb] = await Promise.all([
-        fetchStaff(),
-        fetchMenus(),
-        fetchCustomers(),
-        fetchAppointments(),
-        fetchBlockedDates(),
-        fetchWeeklyBlocks(),
-      ])
+      const [s, m, c, a, bd, wb] = isPreview
+        ? await Promise.all([
+            adminFetchStaff(previewSalonId),
+            adminFetchMenus(previewSalonId),
+            adminFetchCustomers(previewSalonId),
+            adminFetchAppointments(previewSalonId),
+            adminFetchBlockedDates(previewSalonId),
+            adminFetchWeeklyBlocks(previewSalonId),
+          ])
+        : await Promise.all([
+            fetchStaff(),
+            fetchMenus(),
+            fetchCustomers(),
+            fetchAppointments(),
+            fetchBlockedDates(),
+            fetchWeeklyBlocks(),
+          ])
       setStaff(s)
       setMenus(m)
       setCustomers(c)
@@ -1441,10 +1458,10 @@ export default function App() {
     }
   }
 
-  useEffect(() => { if (session) loadAll() }, [session])
+  useEffect(() => { if (session) loadAll() }, [session, previewSalonId])
 
   useEffect(() => {
-    if (!session) return
+    if (!session || isPreview) return
     const channel = supabase
       .channel('appointments-inserts')
       .on(
@@ -1484,7 +1501,7 @@ export default function App() {
 
   if (!session) return <LoginPage />
 
-  const openModal = (type, data = null) => setModal({ type, data })
+  const openModal = (type, data = null) => { if (!isPreview) setModal({ type, data }) }
 
   const saveAppointment = async a => {
     const saved = await upsertAppointment(a)
@@ -1538,19 +1555,23 @@ export default function App() {
   }
 
   const handleAddBlocked = async (date, startTime, endTime, reason) => {
+    if (isPreview) return
     const saved = await addBlockedDate(date, startTime, endTime, reason)
     setBlockedDates(p => [...p, saved].sort((a, b) => a.date.localeCompare(b.date) || (a.time || '').localeCompare(b.time || '')))
   }
   const handleRemoveBlocked = async id => {
+    if (isPreview) return
     await dbRemoveBlockedDate(id)
     setBlockedDates(p => p.filter(b => b.id !== id))
   }
 
   const handleAddWeekly = async (dow, startTime, endTime, reason, weekOfMonth) => {
+    if (isPreview) return
     const saved = await addWeeklyBlock(dow, startTime, endTime, reason, weekOfMonth)
     setWeeklyBlocks(p => [...p, saved].sort((a, b) => a.day_of_week - b.day_of_week || (a.week_of_month ?? 0) - (b.week_of_month ?? 0) || (a.start_time || '').localeCompare(b.start_time || '')))
   }
   const handleRemoveWeekly = async id => {
+    if (isPreview) return
     await dbRemoveWeeklyBlock(id)
     setWeeklyBlocks(p => p.filter(b => b.id !== id))
   }
@@ -1569,6 +1590,18 @@ export default function App() {
       {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
       {toast && <Toast message={toast} onClose={() => setToast(null)} />}
       <main className="main-content">
+        {isPreview && (
+          <div style={{
+            background: 'rgba(201,169,110,0.12)', borderBottom: '1px solid rgba(201,169,110,0.3)',
+            padding: '8px 20px', display: 'flex', alignItems: 'center', gap: '16px',
+            position: 'sticky', top: 0, zIndex: 50,
+          }}>
+            <a href="/admin" style={{ color: 'var(--gold)', fontSize: '13px', textDecoration: 'none', fontWeight: 600 }}>
+              ← 管理者に戻る
+            </a>
+            <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>閲覧モード（変更は保存されません）</span>
+          </div>
+        )}
         <div className="mobile-header">
           <button className="hamburger-btn" onClick={() => setSidebarOpen(true)}>☰</button>
           <span className="mobile-header-title">サロンつなぐ</span>

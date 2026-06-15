@@ -21,6 +21,11 @@ createRoot(document.getElementById('root')).render(
             <AdminPage />
           </AuthProvider>
         } />
+        <Route path="/admin/salon/:salonId" element={
+          <AuthProvider>
+            <App />
+          </AuthProvider>
+        } />
         <Route path="*" element={
           <AuthProvider>
             <App />

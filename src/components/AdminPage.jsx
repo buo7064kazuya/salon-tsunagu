@@ -282,19 +282,32 @@ function SalonRow({ s }) {
         {fmtPrice(s.total_revenue)}
       </td>
       <td style={{ padding: '14px', textAlign: 'right' }}>
-        <a
-          href={`/book/${s.salon_id}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            color: 'var(--gold)', fontSize: '12px', textDecoration: 'none',
-            border: '1px solid rgba(201,169,110,0.4)', borderRadius: '6px',
-            padding: '4px 10px', whiteSpace: 'nowrap',
-            transition: 'background 0.15s',
-          }}
-        >
-          予約ページ
-        </a>
+        <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+          <a
+            href={`/admin/salon/${s.salon_id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              color: 'var(--gold)', fontSize: '12px', textDecoration: 'none',
+              border: '1px solid rgba(201,169,110,0.4)', borderRadius: '6px',
+              padding: '4px 10px', whiteSpace: 'nowrap',
+            }}
+          >
+            詳細を見る
+          </a>
+          <a
+            href={`/book/${s.salon_id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              color: 'var(--text-muted)', fontSize: '12px', textDecoration: 'none',
+              border: '1px solid var(--border-light)', borderRadius: '6px',
+              padding: '4px 10px', whiteSpace: 'nowrap',
+            }}
+          >
+            予約ページ
+          </a>
+        </div>
       </td>
     </tr>
   )
