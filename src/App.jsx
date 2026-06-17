@@ -1450,18 +1450,27 @@ function SchedulePage({ blockedDates, onAddBlocked, onRemoveBlocked, weeklyBlock
 
   async function handleSave() {
     setSaving(true); setSaveMsg(null)
-    const { data: { user } } = await supabase.auth.getUser()
-    const rows = hours.map(h => ({
-      salon_id: user.id,
-      day_of_week: h.day_of_week,
-      is_open: h.is_open,
-      open_time: h.open_time,
-      close_time: h.close_time,
-    }))
-    const { error } = await supabase
-      .from('business_hours')
-      .upsert(rows, { onConflict: 'salon_id,day_of_week' })
-    setSaveMsg(error ? { ok: false, text: error.message } : { ok: true, text: '営業時間を保存しました' })
+    try {
+      const { data: { user }, error: authErr } = await supabase.auth.getUser()
+      if (authErr || !user) {
+        setSaveMsg({ ok: false, text: 'セッションが切れました。再ログインしてください。' })
+        setSaving(false)
+        return
+      }
+      const rows = hours.map(h => ({
+        salon_id: user.id,
+        day_of_week: h.day_of_week,
+        is_open: h.is_open,
+        open_time: h.open_time,
+        close_time: h.close_time,
+      }))
+      const { error } = await supabase
+        .from('business_hours')
+        .upsert(rows, { onConflict: 'salon_id,day_of_week' })
+      setSaveMsg(error ? { ok: false, text: error.message } : { ok: true, text: '営業時間を保存しました' })
+    } catch (e) {
+      setSaveMsg({ ok: false, text: e.message || 'エラーが発生しました' })
+    }
     setSaving(false)
   }
 

@@ -409,13 +409,13 @@ function SalonEditPanel({ salonId, salonEmail, onClose }) {
       p_name: form.name, p_price: Number(form.price),
       p_duration: Number(form.duration), p_category: form.category,
     })
-    loadData()
+    await loadData()
   }
 
   async function handleDeleteMenu(menuId) {
-    if (!confirm('このメニューを削除しますか？')) return
+    if (!window.confirm('このメニューを削除しますか？')) return
     await supabase.rpc('admin_delete_menu', { p_salon_id: salonId, p_menu_id: menuId })
-    loadData()
+    await loadData()
   }
 
   async function handleSaveStaff(staffId, form) {
@@ -423,13 +423,13 @@ function SalonEditPanel({ salonId, salonEmail, onClose }) {
       p_salon_id: salonId, p_staff_id: staffId,
       p_name: form.name, p_role: form.role, p_color: form.color,
     })
-    loadData()
+    await loadData()
   }
 
   async function handleDeleteStaff(staffId) {
-    if (!confirm('このスタッフを削除しますか？')) return
+    if (!window.confirm('このスタッフを削除しますか？')) return
     await supabase.rpc('admin_delete_staff', { p_salon_id: salonId, p_staff_id: staffId })
-    loadData()
+    await loadData()
   }
 
   async function handleSetPassphrase() {
