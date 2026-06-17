@@ -69,25 +69,26 @@ function getAvailableStaffIds(slot, duration, appointments, allStaffIds) {
   })
 }
 
-// ===== PUBLIC DB (anon key — requires Supabase RLS policies) =====
-async function fetchPublicMenus() {
+// ===== PUBLIC DB (anon key — Supabase RLS + RPC で保護) =====
+async function fetchPublicMenus(salonId) {
   const { data, error } = await supabase
-    .from('menus').select('*').order('category').order('id')
+    .from('menus').select('*').eq('salon_id', salonId).order('category').order('id')
   if (error) throw error
   return data
 }
 
-async function fetchPublicStaff() {
+async function fetchPublicStaff(salonId) {
   const { data, error } = await supabase
-    .from('staff').select('id, name, role, color').order('id')
+    .from('staff').select('id, name, role, color').eq('salon_id', salonId).order('id')
   if (error) throw error
   return data
 }
 
-async function fetchPublicAppointmentsByDate(date) {
+async function fetchPublicAppointmentsByDate(date, salonId) {
   const { data, error } = await supabase
     .from('appointments')
     .select('staff_id, time, duration')
+    .eq('salon_id', salonId)
     .eq('date', date)
     .neq('status', 'cancelled')
   if (error) throw error
@@ -98,32 +99,22 @@ async function fetchPublicAppointmentsByDate(date) {
   }))
 }
 
-async function createPublicBooking({ name, phone, email, notes, birthdate, menuId, staffId, date, time, duration }) {
-  const { data: customer, error: ce } = await supabase
-    .from('customers')
-    .insert({
-      name, phone, email: email || '', notes: notes || '', visit_count: 0,
-      birthdate: birthdate || null,
-    })
-    .select('id')
-    .single()
-  if (ce) throw ce
-
-  const { data: appt, error: ae } = await supabase
-    .from('appointments')
-    .insert({
-      customer_id: customer.id,
-      staff_id: staffId,
-      menu_id: menuId,
-      date, time, duration,
-      notes: notes || '',
-      status: 'pending',
-    })
-    .select('id, public_id')
-    .single()
-  if (ae) throw ae
-
-  return appt
+async function createPublicBooking({ salonId, name, phone, email, notes, birthdate, menuId, staffId, date, time, duration }) {
+  const { data, error } = await supabase.rpc('create_public_booking', {
+    p_salon_id:  salonId,
+    p_name:      name,
+    p_phone:     phone,
+    p_email:     email || null,
+    p_notes:     notes || null,
+    p_birthdate: birthdate || null,
+    p_menu_id:   menuId,
+    p_staff_id:  staffId,
+    p_date:      date,
+    p_time:      time,
+    p_duration:  duration,
+  })
+  if (error) throw error
+  return data
 }
 
 // ===== PROGRESS BAR =====
@@ -237,11 +228,11 @@ function DateTimeStep({ menu, staff, salonId, selectedDate, setSelectedDate, sel
     if (!selectedDate) return
     setLoadingSlots(true)
     setSelectedTime(null)
-    fetchPublicAppointmentsByDate(selectedDate)
+    fetchPublicAppointmentsByDate(selectedDate, salonId)
       .then(setAppointments)
       .catch(console.error)
       .finally(() => setLoadingSlots(false))
-  }, [selectedDate])
+  }, [selectedDate, salonId])
 
   const slots = useMemo(() => generateSlots(menu.duration), [menu.duration])
   const staffIds = useMemo(() => staff.map(st => st.id), [staff])
@@ -646,21 +637,22 @@ export default function BookingPage() {
   const [apptPublicId, setApptPublicId] = useState(null)
 
   useEffect(() => {
-    Promise.all([fetchPublicMenus(), fetchPublicStaff()])
+    Promise.all([fetchPublicMenus(salonId), fetchPublicStaff(salonId)])
       .then(([m, st]) => { setMenus(m); setStaff(st) })
       .catch(e => setLoadError(e.message))
       .finally(() => setLoading(false))
-  }, [])
+  }, [salonId])
 
   const handleSubmit = async ({ name, phone, email, birthdate, notes }) => {
     setSubmitting(true)
     try {
-      const appointments = await fetchPublicAppointmentsByDate(selectedDate)
+      const appointments = await fetchPublicAppointmentsByDate(selectedDate, salonId)
       const staffIds = staff.map(st => st.id)
       const available = getAvailableStaffIds(selectedTime, selectedMenu.duration, appointments, staffIds)
       const staffId = available.length > 0 ? available[0] : (staff[0]?.id ?? null)
 
       const appt = await createPublicBooking({
+        salonId,
         name, phone, email, birthdate, notes,
         menuId: selectedMenu.id,
         staffId,

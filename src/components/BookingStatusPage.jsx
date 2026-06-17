@@ -14,34 +14,14 @@ function fmtPrice(n) {
 }
 
 // ===== DB =====
-// public_id (UUID) で予約を取得し、内部 id (整数) も一緒に返す
 async function fetchBooking(publicId) {
-  const { data: appt, error: e1 } = await supabase
-    .from('appointments')
-    .select('id, public_id, date, time, duration, status, notes, customer_id, menu_id, staff_id')
-    .eq('public_id', publicId)
-    .single()
-  if (e1) { console.error('appointments error:', e1); throw e1 }
-
-  const [cr, mr, sr] = await Promise.all([
-    supabase.from('customers').select('name, phone, email').eq('id', appt.customer_id).single(),
-    supabase.from('menus').select('name, price, duration').eq('id', appt.menu_id).single(),
-    supabase.from('staff').select('name, color').eq('id', appt.staff_id).single(),
-  ])
-
-  return {
-    ...appt,
-    customers: cr.data,
-    menus: mr.data,
-    staff: sr.data,
-  }
+  const { data, error } = await supabase.rpc('get_public_booking', { p_public_id: publicId })
+  if (error) { console.error('get_public_booking error:', error); throw error }
+  return data
 }
 
-async function cancelBooking(appointmentId) {
-  const { error } = await supabase
-    .from('appointments')
-    .update({ status: 'cancelled' })
-    .eq('id', appointmentId)
+async function cancelBooking(publicId) {
+  const { error } = await supabase.rpc('cancel_public_booking', { p_public_id: publicId })
   if (error) throw error
 }
 
@@ -104,7 +84,7 @@ export default function BookingStatusPage() {
     if (!window.confirm('この予約をキャンセルしてもよろしいですか？\nキャンセル後は取り消せません。')) return
     setCancelling(true)
     try {
-      await cancelBooking(booking.id)
+      await cancelBooking(publicId)
       // Realtime が status を 'cancelled' に更新する
     } catch {
       alert('キャンセルに失敗しました。もう一度お試しください。')

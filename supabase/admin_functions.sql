@@ -147,3 +147,31 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION get_salon_customers(UUID) TO authenticated;
+
+-- ============================================================
+-- 年代別顧客数（管理者専用）
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION get_age_group_stats()
+RETURNS TABLE(age_group TEXT, count BIGINT)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  caller_email TEXT;
+BEGIN
+  SELECT au.email INTO caller_email FROM auth.users au WHERE au.id = auth.uid();
+  IF caller_email IS DISTINCT FROM 'buo7064kazuya@gmail.com' THEN
+    RAISE EXCEPTION 'Unauthorized: admin access only';
+  END IF;
+
+  RETURN QUERY
+  SELECT c.age_group::TEXT, COUNT(*)::BIGINT
+  FROM customers c
+  WHERE c.age_group IS NOT NULL
+  GROUP BY c.age_group;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_age_group_stats() TO authenticated;
