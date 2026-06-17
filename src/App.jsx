@@ -149,10 +149,20 @@ const NAV = [
   { id: 'customers', label: '顧客管理', icon: '◎' },
   { id: 'menus', label: 'メニュー管理', icon: '◐' },
   { id: 'staff', label: 'スタッフ管理', icon: '◑' },
-  { id: 'blocked', label: '休業日設定', icon: '◻' },
-  { id: 'weekly', label: '定期ブロック', icon: '◫' },
+  { id: 'schedule', label: '営業・休業設定', icon: '◻' },
   { id: 'settings', label: 'アカウント設定', icon: '◇' },
 ]
+
+const BIZ_HOUR_OPTIONS = (() => {
+  const opts = []
+  for (let h = 5; h <= 23; h++) {
+    for (const m of [0, 30]) {
+      if (h === 23 && m === 30) continue
+      opts.push(`${pad(h)}:${pad(m)}`)
+    }
+  }
+  return opts
+})()
 
 function Sidebar({ page, setPage, user, onSignOut, notifPerm, onRequestNotif, isOpen, onClose }) {
   const [copied, setCopied] = useState(false)
@@ -756,7 +766,7 @@ const BLOCK_TIME_OPTIONS = (() => {
   return opts
 })()
 
-function BlockedDatesPage({ blockedDates, onAdd, onRemove }) {
+function BlockedDatesPage({ blockedDates, onAdd, onRemove, embedded = false }) {
   const [date, setDate] = useState('')
   const [allDay, setAllDay] = useState(true)
   const [startTime, setStartTime] = useState('09:00')
@@ -783,11 +793,13 @@ function BlockedDatesPage({ blockedDates, onAdd, onRemove }) {
     }
   }
 
-  return (
-    <div className="page">
-      <div className="page-header">
-        <h1 className="page-title">休業日・ブロック設定</h1>
-      </div>
+  const blockedContent = (
+    <>
+      {!embedded && (
+        <div className="page-header">
+          <h1 className="page-title">休業日・ブロック設定</h1>
+        </div>
+      )}
       <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '20px' }}>
         終日を選ぶとその日丸ごと、時間帯を指定するとその時間のみ予約不可になります。
       </p>
@@ -888,8 +900,10 @@ function BlockedDatesPage({ blockedDates, onAdd, onRemove }) {
           </table>
         )}
       </div>
-    </div>
+    </>
   )
+
+  return embedded ? <div>{blockedContent}</div> : <div className="page">{blockedContent}</div>
 }
 
 // ==================== WEEKLY BLOCKS PAGE ====================
@@ -913,7 +927,7 @@ const WEEK_OF_MONTH_OPTIONS = [
   { value: 4, label: '第4週' },
 ]
 
-function WeeklyBlocksPage({ weeklyBlocks, onAdd, onRemove }) {
+function WeeklyBlocksPage({ weeklyBlocks, onAdd, onRemove, embedded = false }) {
   const [dow, setDow] = useState(1)
   const [weekOfMonth, setWeekOfMonth] = useState(0)
   const [allDay, setAllDay] = useState(true)
@@ -938,11 +952,13 @@ function WeeklyBlocksPage({ weeklyBlocks, onAdd, onRemove }) {
     }
   }
 
-  return (
-    <div className="page">
-      <div className="page-header">
-        <h1 className="page-title">定期ブロック設定</h1>
-      </div>
+  const weeklyContent = (
+    <>
+      {!embedded && (
+        <div className="page-header">
+          <h1 className="page-title">定期ブロック設定</h1>
+        </div>
+      )}
       <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '20px' }}>
         毎週特定の曜日・時間帯を予約不可にします。終日を選ぶとその曜日丸ごとブロックされます。
       </p>
@@ -1049,8 +1065,10 @@ function WeeklyBlocksPage({ weeklyBlocks, onAdd, onRemove }) {
           </table>
         )}
       </div>
-    </div>
+    </>
   )
+
+  return embedded ? <div>{weeklyContent}</div> : <div className="page">{weeklyContent}</div>
 }
 
 // ==================== STAFF PAGE ====================
@@ -1393,6 +1411,157 @@ function StaffForm({ data, onSave, onDelete, onClose }) {
   )
 }
 
+// ==================== SCHEDULE PAGE ====================
+const DEFAULT_BIZ_HOURS = Array.from({ length: 7 }, (_, i) => ({
+  day_of_week: i, is_open: true, open_time: '09:00', close_time: '19:00',
+}))
+
+function SchedulePage({ blockedDates, onAddBlocked, onRemoveBlocked, weeklyBlocks, onAddWeekly, onRemoveWeekly }) {
+  const [tab, setTab] = useState('hours')
+  const [hours, setHours] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [saveMsg, setSaveMsg] = useState(null)
+
+  useEffect(() => {
+    supabase.from('business_hours').select('*').order('day_of_week').then(({ data }) => {
+      if (!data || data.length === 0) {
+        setHours(DEFAULT_BIZ_HOURS.map(d => ({ ...d })))
+      } else {
+        const map = Object.fromEntries(data.map(h => [h.day_of_week, h]))
+        setHours(DEFAULT_BIZ_HOURS.map(d => map[d.day_of_week] ? { ...map[d.day_of_week] } : { ...d }))
+      }
+    })
+  }, [])
+
+  const update = (dow, field, value) =>
+    setHours(prev => prev.map(h => h.day_of_week === dow ? { ...h, [field]: value } : h))
+
+  async function handleSave() {
+    setSaving(true); setSaveMsg(null)
+    const { data: { user } } = await supabase.auth.getUser()
+    const rows = hours.map(h => ({
+      salon_id: user.id,
+      day_of_week: h.day_of_week,
+      is_open: h.is_open,
+      open_time: h.open_time,
+      close_time: h.close_time,
+    }))
+    const { error } = await supabase
+      .from('business_hours')
+      .upsert(rows, { onConflict: 'salon_id,day_of_week' })
+    setSaveMsg(error ? { ok: false, text: error.message } : { ok: true, text: '営業時間を保存しました' })
+    setSaving(false)
+  }
+
+  const SCHEDULE_TABS = [
+    { id: 'hours', label: '営業時間' },
+    { id: 'blocked', label: '休業日設定' },
+    { id: 'weekly', label: '定期ブロック' },
+  ]
+
+  return (
+    <div className="page">
+      <div className="page-header">
+        <h1 className="page-title">営業・休業設定</h1>
+      </div>
+
+      {/* タブバー */}
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--border-light)', marginBottom: '28px' }}>
+        {SCHEDULE_TABS.map(t => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            style={{
+              background: 'none', border: 'none', padding: '10px 20px',
+              fontSize: '14px', cursor: 'pointer', fontWeight: tab === t.id ? 700 : 400,
+              color: tab === t.id ? 'var(--gold)' : 'var(--text-muted)',
+              borderBottom: tab === t.id ? '2px solid var(--gold)' : '2px solid transparent',
+              marginBottom: '-1px', transition: 'color 0.15s',
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* 営業時間タブ */}
+      {tab === 'hours' && (
+        !hours ? (
+          <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>読み込み中...</div>
+        ) : (
+          <div className="card" style={{ maxWidth: '560px' }}>
+            <div className="card-header">
+              <h2 className="card-title">曜日ごとの営業時間</h2>
+            </div>
+            <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {hours.map(h => (
+                <div key={h.day_of_week} style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                  <div style={{
+                    width: '28px', textAlign: 'center', fontWeight: 700, fontSize: '15px', flexShrink: 0,
+                    color: h.day_of_week === 0 ? '#E05C5C' : h.day_of_week === 6 ? '#5C8BCC' : 'var(--text)',
+                  }}>
+                    {DAYS_JP[h.day_of_week]}
+                  </div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', flexShrink: 0 }}>
+                    <input
+                      type="checkbox"
+                      checked={h.is_open}
+                      onChange={e => update(h.day_of_week, 'is_open', e.target.checked)}
+                    />
+                    <span style={{ fontSize: '13px', color: h.is_open ? 'var(--gold)' : 'var(--text-muted)', width: '32px', fontWeight: 600 }}>
+                      {h.is_open ? '営業' : '休み'}
+                    </span>
+                  </label>
+                  {h.is_open ? (
+                    <>
+                      <select
+                        className="input-field"
+                        value={h.open_time}
+                        onChange={e => update(h.day_of_week, 'open_time', e.target.value)}
+                        style={{ width: 'auto' }}
+                      >
+                        {BIZ_HOUR_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                      <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>〜</span>
+                      <select
+                        className="input-field"
+                        value={h.close_time}
+                        onChange={e => update(h.day_of_week, 'close_time', e.target.value)}
+                        style={{ width: 'auto' }}
+                      >
+                        {BIZ_HOUR_OPTIONS.filter(o => o > h.open_time).map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </>
+                  ) : (
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)', opacity: 0.6 }}>予約不可</span>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {saveMsg && (
+              <div style={{ fontSize: '13px', color: saveMsg.ok ? '#5CB85C' : '#E05C5C', marginTop: '14px' }}>
+                {saveMsg.text}
+              </div>
+            )}
+            <button className="btn-primary" disabled={saving} onClick={handleSave} style={{ marginTop: '20px' }}>
+              {saving ? '保存中...' : '保存する'}
+            </button>
+          </div>
+        )
+      )}
+
+      {tab === 'blocked' && (
+        <BlockedDatesPage blockedDates={blockedDates} onAdd={onAddBlocked} onRemove={onRemoveBlocked} embedded />
+      )}
+
+      {tab === 'weekly' && (
+        <WeeklyBlocksPage weeklyBlocks={weeklyBlocks} onAdd={onAddWeekly} onRemove={onRemoveWeekly} embedded />
+      )}
+    </div>
+  )
+}
+
 // ==================== SETTINGS PAGE ====================
 function SettingsPage({ user }) {
   const [current, setCurrent] = useState(null)
@@ -1721,8 +1890,12 @@ export default function App() {
             {page === 'customers' && <CustomersPage customers={customers} openModal={openModal} />}
             {page === 'menus' && <MenusPage menus={menus} openModal={openModal} />}
             {page === 'staff' && <StaffPage staff={staff} appointments={appointments} openModal={openModal} />}
-            {page === 'blocked' && <BlockedDatesPage blockedDates={blockedDates} onAdd={handleAddBlocked} onRemove={handleRemoveBlocked} />}
-            {page === 'weekly' && <WeeklyBlocksPage weeklyBlocks={weeklyBlocks} onAdd={handleAddWeekly} onRemove={handleRemoveWeekly} />}
+            {page === 'schedule' && (
+              <SchedulePage
+                blockedDates={blockedDates} onAddBlocked={handleAddBlocked} onRemoveBlocked={handleRemoveBlocked}
+                weeklyBlocks={weeklyBlocks} onAddWeekly={handleAddWeekly} onRemoveWeekly={handleRemoveWeekly}
+              />
+            )}
             {page === 'settings' && <SettingsPage user={user} />}
           </>
         )}

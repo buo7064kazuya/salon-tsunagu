@@ -46,10 +46,10 @@ const SLOT_START_H = 9
 const SLOT_END_H = 19
 const SLOT_INTERVAL = 15
 
-function generateSlots(duration) {
+function generateSlots(duration, openMins = SLOT_START_H * 60, closeMins = SLOT_END_H * 60) {
   const slots = []
-  const endMins = SLOT_END_H * 60 - duration
-  for (let m = SLOT_START_H * 60; m <= endMins; m += SLOT_INTERVAL) {
+  const endMins = closeMins - duration
+  for (let m = openMins; m <= endMins; m += SLOT_INTERVAL) {
     slots.push(`${pad(Math.floor(m / 60))}:${pad(m % 60)}`)
   }
   return slots
@@ -187,6 +187,7 @@ function DateTimeStep({ menu, staff, salonId, selectedDate, setSelectedDate, sel
   const [appointments, setAppointments] = useState([])
   const [blockedDates, setBlockedDates] = useState([])
   const [weeklyBlocks, setWeeklyBlocks] = useState([])
+  const [businessHours, setBusinessHours] = useState([])
   const [loadingSlots, setLoadingSlots] = useState(false)
   const TODAY = getTodayStr()
 
@@ -218,9 +219,11 @@ function DateTimeStep({ menu, staff, salonId, selectedDate, setSelectedDate, sel
     Promise.all([
       supabase.from('blocked_dates').select('date, time, end_time').eq('salon_id', salonId),
       supabase.from('weekly_blocks').select('day_of_week, start_time, end_time, week_of_month').eq('salon_id', salonId),
-    ]).then(([bd, wb]) => {
+      supabase.from('business_hours').select('day_of_week, is_open, open_time, close_time').eq('salon_id', salonId),
+    ]).then(([bd, wb, bh]) => {
       setBlockedDates(bd.data || [])
       setWeeklyBlocks(wb.data || [])
+      setBusinessHours(bh.data || [])
     })
   }, [salonId])
 
@@ -234,7 +237,22 @@ function DateTimeStep({ menu, staff, salonId, selectedDate, setSelectedDate, sel
       .finally(() => setLoadingSlots(false))
   }, [selectedDate, salonId])
 
-  const slots = useMemo(() => generateSlots(menu.duration), [menu.duration])
+  const getBizHours = (dow) => {
+    const bh = businessHours.find(h => h.day_of_week === dow)
+    return bh || { is_open: true, open_time: '09:00', close_time: '19:00' }
+  }
+
+  const selectedDowHours = useMemo(() => {
+    if (!selectedDate) return { is_open: true, open_time: '09:00', close_time: '19:00' }
+    const dow = new Date(selectedDate + 'T12:00:00').getDay()
+    return getBizHours(dow)
+  }, [selectedDate, businessHours])
+
+  const slots = useMemo(() => {
+    if (!selectedDowHours.is_open) return []
+    return generateSlots(menu.duration, timeToMins(selectedDowHours.open_time), timeToMins(selectedDowHours.close_time))
+  }, [menu.duration, selectedDowHours])
+
   const staffIds = useMemo(() => staff.map(st => st.id), [staff])
 
   const blockedRangesForDate = useMemo(() => {
@@ -325,7 +343,8 @@ function DateTimeStep({ menu, staff, salonId, selectedDate, setSelectedDate, sel
             const isFuture  = ds > maxDateStr
             const isBlocked = blockedDates.some(b => b.date === ds && !b.time) ||
               weeklyBlocks.some(b => b.day_of_week === dow && !b.start_time && (b.week_of_month == null || b.week_of_month === weekOfMonth))
-            const disabled  = isPast || isFuture || isBlocked
+            const isClosed  = businessHours.length > 0 && !getBizHours(dow).is_open
+            const disabled  = isPast || isFuture || isBlocked || isClosed
             const isSelected = ds === selectedDate
             const isToday = ds === TODAY
             return (
