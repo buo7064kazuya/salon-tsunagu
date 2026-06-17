@@ -244,3 +244,44 @@ BEGIN
 END;
 $$;
 GRANT EXECUTE ON FUNCTION admin_delete_staff(UUID, BIGINT) TO authenticated;
+
+-- ============================================================
+-- 10. オーナー自身があいことばを設定・取得
+-- ============================================================
+CREATE OR REPLACE FUNCTION owner_set_passphrase(p_passphrase TEXT)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'Unauthorized';
+  END IF;
+
+  INSERT INTO salon_settings (salon_id, passphrase, updated_at)
+  VALUES (auth.uid(), p_passphrase, NOW())
+  ON CONFLICT (salon_id)
+  DO UPDATE SET passphrase = EXCLUDED.passphrase, updated_at = NOW();
+END;
+$$;
+GRANT EXECUTE ON FUNCTION owner_set_passphrase(TEXT) TO authenticated;
+
+CREATE OR REPLACE FUNCTION owner_get_passphrase()
+RETURNS TEXT
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  stored_pass TEXT;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'Unauthorized';
+  END IF;
+
+  SELECT passphrase INTO stored_pass FROM salon_settings WHERE salon_id = auth.uid();
+  RETURN stored_pass;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION owner_get_passphrase() TO authenticated;

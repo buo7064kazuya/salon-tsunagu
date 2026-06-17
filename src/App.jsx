@@ -151,6 +151,7 @@ const NAV = [
   { id: 'staff', label: 'スタッフ管理', icon: '◑' },
   { id: 'blocked', label: '休業日設定', icon: '◻' },
   { id: 'weekly', label: '定期ブロック', icon: '◫' },
+  { id: 'settings', label: 'アカウント設定', icon: '◇' },
 ]
 
 function Sidebar({ page, setPage, user, onSignOut, notifPerm, onRequestNotif, isOpen, onClose }) {
@@ -1392,6 +1393,102 @@ function StaffForm({ data, onSave, onDelete, onClose }) {
   )
 }
 
+// ==================== SETTINGS PAGE ====================
+function SettingsPage({ user }) {
+  const [current, setCurrent] = useState(null)
+  const [newPass, setNewPass] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    supabase.rpc('owner_get_passphrase').then(({ data }) => {
+      setCurrent(data || '')
+      setLoading(false)
+    })
+  }, [])
+
+  async function handleSave() {
+    if (!newPass.trim()) { setMsg({ ok: false, text: 'あいことばを入力してください' }); return }
+    setSaving(true); setMsg(null)
+    const { error } = await supabase.rpc('owner_set_passphrase', { p_passphrase: newPass })
+    if (error) {
+      setMsg({ ok: false, text: error.message })
+    } else {
+      setCurrent(newPass)
+      setNewPass('')
+      setMsg({ ok: true, text: 'あいことばを保存しました' })
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div className="page">
+      <div className="page-header">
+        <h1 className="page-title">アカウント設定</h1>
+      </div>
+
+      <div className="card" style={{ maxWidth: '480px' }}>
+        <div className="card-header">
+          <h2 className="card-title">あいことば設定</h2>
+        </div>
+        <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: '0 0 20px', lineHeight: 1.7 }}>
+          管理者に設定変更を依頼する際に使うあいことばです。<br />
+          管理者にこのあいことばを伝えてください。
+        </p>
+
+        {loading ? (
+          <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>読み込み中...</div>
+        ) : (
+          <>
+            {current && (
+              <div style={{
+                background: 'rgba(201,169,110,0.08)', border: '1px solid rgba(201,169,110,0.3)',
+                borderRadius: '8px', padding: '12px 16px', marginBottom: '20px',
+              }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>現在のあいことば</div>
+                <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--gold)', letterSpacing: '0.05em' }}>{current}</div>
+              </div>
+            )}
+
+            <div className="form-group">
+              <label className="form-label">{current ? 'あいことばを変更する' : 'あいことばを設定する'}</label>
+              <input
+                className="input-field"
+                value={newPass}
+                onChange={e => setNewPass(e.target.value)}
+                placeholder="例: さくら123"
+                onKeyDown={e => e.key === 'Enter' && handleSave()}
+              />
+            </div>
+
+            {msg && (
+              <div style={{ fontSize: '13px', color: msg.ok ? '#5CB85C' : '#E05C5C', margin: '8px 0' }}>
+                {msg.text}
+              </div>
+            )}
+
+            <button className="btn-primary" disabled={saving} onClick={handleSave} style={{ marginTop: '8px' }}>
+              {saving ? '保存中...' : '保存する'}
+            </button>
+          </>
+        )}
+      </div>
+
+      <div className="card" style={{ maxWidth: '480px', marginTop: '20px' }}>
+        <div className="card-header">
+          <h2 className="card-title">アカウント情報</h2>
+        </div>
+        <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+          <div style={{ marginBottom: '8px' }}>
+            <span style={{ color: 'var(--text)', fontWeight: 600 }}>メールアドレス：</span> {user?.email}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ==================== ROOT APP ====================
 export default function App() {
   const { session, user, signOut } = useAuth()
@@ -1626,6 +1723,7 @@ export default function App() {
             {page === 'staff' && <StaffPage staff={staff} appointments={appointments} openModal={openModal} />}
             {page === 'blocked' && <BlockedDatesPage blockedDates={blockedDates} onAdd={handleAddBlocked} onRemove={handleRemoveBlocked} />}
             {page === 'weekly' && <WeeklyBlocksPage weeklyBlocks={weeklyBlocks} onAdd={handleAddWeekly} onRemove={handleRemoveWeekly} />}
+            {page === 'settings' && <SettingsPage user={user} />}
           </>
         )}
       </main>
