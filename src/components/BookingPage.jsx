@@ -86,11 +86,7 @@ async function fetchPublicStaff(salonId) {
 
 async function fetchPublicAppointmentsByDate(date, salonId) {
   const { data, error } = await supabase
-    .from('appointments')
-    .select('staff_id, time, duration')
-    .eq('salon_id', salonId)
-    .eq('date', date)
-    .neq('status', 'cancelled')
+    .rpc('get_public_availability', { p_salon_id: salonId, p_date: date })
   if (error) throw error
   return data.map(r => ({
     staffId: r.staff_id,
