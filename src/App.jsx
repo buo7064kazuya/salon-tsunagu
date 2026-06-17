@@ -230,6 +230,18 @@ function Sidebar({ page, setPage, user, onSignOut, notifPerm, onRequestNotif, is
         >
           {copied ? '✓ コピーしました' : '予約ページURLをコピー'}
         </button>
+        <a
+          href="/manual.pdf"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: 'block', background: 'none', border: '1px solid var(--border-light)',
+            color: 'var(--text-muted)', borderRadius: '6px', padding: '5px 10px',
+            fontSize: '12px', textAlign: 'left', textDecoration: 'none',
+          }}
+        >
+          📄 使い方・マニュアル
+        </a>
         <button
           onClick={onSignOut}
           style={{ background: 'none', border: '1px solid var(--border-light)', color: 'var(--text-muted)', borderRadius: '6px', padding: '5px 10px', fontSize: '12px', cursor: 'pointer', textAlign: 'left', transition: 'border-color 0.15s, color 0.15s' }}
