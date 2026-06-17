@@ -187,7 +187,7 @@ function DateTimeStep({ menu, staff, salonId, selectedDate, setSelectedDate, sel
   const [appointments, setAppointments] = useState([])
   const [blockedDates, setBlockedDates] = useState([])
   const [weeklyBlocks, setWeeklyBlocks] = useState([])
-  const [businessHours, setBusinessHours] = useState([])
+  const [businessHours, setBusinessHours] = useState(null) // null = 読み込み中
   const [loadingSlots, setLoadingSlots] = useState(false)
   const TODAY = getTodayStr()
 
@@ -333,7 +333,12 @@ function DateTimeStep({ menu, staff, salonId, selectedDate, setSelectedDate, sel
             </div>
           ))}
         </div>
-        <div style={s.calGrid}>
+        {businessHours === null ? (
+          <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: '13px' }}>
+            読み込み中...
+          </div>
+        ) : null}
+        <div style={{ ...s.calGrid, ...(businessHours === null ? { display: 'none' } : {}) }}>
           {cells.map((day, i) => {
             if (!day) return <div key={`e${i}`} />
             const ds = `${y}-${pad(mo + 1)}-${pad(day)}`
@@ -343,7 +348,7 @@ function DateTimeStep({ menu, staff, salonId, selectedDate, setSelectedDate, sel
             const isFuture  = ds > maxDateStr
             const isBlocked = blockedDates.some(b => b.date === ds && !b.time) ||
               weeklyBlocks.some(b => b.day_of_week === dow && !b.start_time && (b.week_of_month == null || b.week_of_month === weekOfMonth))
-            const isClosed  = businessHours.length > 0 && !getBizHours(dow).is_open
+            const isClosed  = businessHours !== null && businessHours.length > 0 && !getBizHours(dow).is_open
             const disabled  = isPast || isFuture || isBlocked || isClosed
             const isSelected = ds === selectedDate
             const isToday = ds === TODAY

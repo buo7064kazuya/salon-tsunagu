@@ -1593,7 +1593,7 @@ function SettingsPage({ user }) {
 
   useEffect(() => {
     supabase.rpc('owner_get_passphrase').then(({ data }) => {
-      setCurrent(data || '')
+      setCurrent(!!data) // true = 設定済み
       setLoading(false)
     })
   }, [])
@@ -1605,7 +1605,7 @@ function SettingsPage({ user }) {
     if (error) {
       setMsg({ ok: false, text: error.message })
     } else {
-      setCurrent(newPass)
+      setCurrent(true)
       setNewPass('')
       setMsg({ ok: true, text: 'あいことばを保存しました' })
     }
@@ -1633,11 +1633,17 @@ function SettingsPage({ user }) {
           <>
             {current && (
               <div style={{
-                background: 'rgba(201,169,110,0.08)', border: '1px solid rgba(201,169,110,0.3)',
+                background: 'rgba(92,184,92,0.08)', border: '1px solid rgba(92,184,92,0.3)',
                 borderRadius: '8px', padding: '12px 16px', marginBottom: '20px',
+                display: 'flex', alignItems: 'center', gap: '10px',
               }}>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>現在のあいことば</div>
-                <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--gold)', letterSpacing: '0.05em' }}>{current}</div>
+                <span style={{ color: '#5CB85C', fontSize: '16px' }}>✓</span>
+                <div>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#5CB85C' }}>設定済み</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                    セキュリティのため内容は表示されません
+                  </div>
+                </div>
               </div>
             )}
 
