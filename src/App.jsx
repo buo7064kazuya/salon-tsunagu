@@ -1591,6 +1591,26 @@ function SettingsPage({ user }) {
   const [msg, setMsg] = useState(null)
   const [loading, setLoading] = useState(true)
 
+  const [pwNew, setPwNew] = useState('')
+  const [pwConfirm, setPwConfirm] = useState('')
+  const [pwSaving, setPwSaving] = useState(false)
+  const [pwMsg, setPwMsg] = useState(null)
+
+  async function handlePasswordChange() {
+    if (!pwNew.trim()) { setPwMsg({ ok: false, text: '新しいパスワードを入力してください' }); return }
+    if (pwNew.length < 6) { setPwMsg({ ok: false, text: 'パスワードは6文字以上で設定してください' }); return }
+    if (pwNew !== pwConfirm) { setPwMsg({ ok: false, text: 'パスワードが一致しません' }); return }
+    setPwSaving(true); setPwMsg(null)
+    const { error } = await supabase.auth.updateUser({ password: pwNew })
+    if (error) {
+      setPwMsg({ ok: false, text: 'パスワードの変更に失敗しました' })
+    } else {
+      setPwNew(''); setPwConfirm('')
+      setPwMsg({ ok: true, text: 'パスワードを変更しました' })
+    }
+    setPwSaving(false)
+  }
+
   useEffect(() => {
     supabase.rpc('owner_get_passphrase').then(({ data }) => {
       setCurrent(!!data) // true = 設定済み
@@ -1675,10 +1695,43 @@ function SettingsPage({ user }) {
         <div className="card-header">
           <h2 className="card-title">アカウント情報</h2>
         </div>
-        <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-          <div style={{ marginBottom: '8px' }}>
+        <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '20px' }}>
+          <div>
             <span style={{ color: 'var(--text)', fontWeight: 600 }}>メールアドレス：</span> {user?.email}
           </div>
+        </div>
+
+        <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: '20px' }}>
+          <div className="card-title" style={{ fontSize: '14px', marginBottom: '16px' }}>パスワード変更</div>
+          <div className="form-group">
+            <label className="form-label">新しいパスワード（6文字以上）</label>
+            <input
+              className="input-field"
+              type="password"
+              value={pwNew}
+              onChange={e => setPwNew(e.target.value)}
+              placeholder="••••••••"
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">新しいパスワード（確認）</label>
+            <input
+              className="input-field"
+              type="password"
+              value={pwConfirm}
+              onChange={e => setPwConfirm(e.target.value)}
+              placeholder="••••••••"
+              onKeyDown={e => e.key === 'Enter' && handlePasswordChange()}
+            />
+          </div>
+          {pwMsg && (
+            <div style={{ fontSize: '13px', color: pwMsg.ok ? '#5CB85C' : '#E05C5C', margin: '8px 0' }}>
+              {pwMsg.text}
+            </div>
+          )}
+          <button className="btn-primary" disabled={pwSaving} onClick={handlePasswordChange} style={{ marginTop: '8px' }}>
+            {pwSaving ? '変更中...' : 'パスワードを変更する'}
+          </button>
         </div>
       </div>
     </div>
