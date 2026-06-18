@@ -4,13 +4,12 @@ import { supabase } from '../lib/supabase'
 import PrivacyPolicy from './PrivacyPolicy'
 
 export default function LoginPage() {
-  const { signIn, signUp } = useAuth()
-  const [mode, setMode] = useState('login') // 'login' | 'signup' | 'reset'
+  const { signIn } = useAuth()
+  const [mode, setMode] = useState('login') // 'login' | 'reset'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [signupDone, setSignupDone] = useState(false)
   const [resetDone, setResetDone] = useState(false)
   const [showPrivacy, setShowPrivacy] = useState(false)
 
@@ -21,14 +20,8 @@ export default function LoginPage() {
     setError(null)
     setLoading(true)
     try {
-      if (mode === 'login') {
-        const { error } = await signIn(email, password)
-        if (error) throw error
-      } else {
-        const { error } = await signUp(email, password)
-        if (error) throw error
-        setSignupDone(true)
-      }
+      const { error } = await signIn(email, password)
+      if (error) throw error
     } catch (err) {
       setError(err.message)
     } finally {
@@ -60,27 +53,6 @@ export default function LoginPage() {
       <p style={styles.logoSub}>Salon Management</p>
     </div>
   )
-
-  // 新規登録完了
-  if (signupDone) {
-    return (
-      <div style={styles.page}>
-        <div style={styles.box}>
-          <Logo />
-          <div style={styles.successBox}>
-            <div style={{ fontSize: '28px', marginBottom: '12px' }}>✉</div>
-            <p style={{ fontWeight: 600, marginBottom: '8px' }}>確認メールを送信しました</p>
-            <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
-              {email} に届いたメールのリンクをクリックしてアカウントを有効化してください。
-            </p>
-          </div>
-          <button style={styles.linkBtn} onClick={() => { setSignupDone(false); switchMode('login') }}>
-            ログイン画面に戻る
-          </button>
-        </div>
-      </div>
-    )
-  }
 
   // パスワードリセットメール送信完了
   if (resetDone) {
@@ -148,7 +120,7 @@ export default function LoginPage() {
       <div style={styles.box}>
         <Logo />
 
-        <h2 style={styles.title}>{mode === 'login' ? 'ログイン' : 'アカウント作成'}</h2>
+        <h2 style={styles.title}>ログイン</h2>
 
         {error && <div style={styles.errorBox}>{translateError(error)}</div>}
 
@@ -167,18 +139,14 @@ export default function LoginPage() {
           </div>
           <div style={styles.field}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-              <label style={styles.label}>
-                パスワード{mode === 'signup' && <span style={{ color: 'var(--text-muted)', fontSize: '11px', marginLeft: '6px' }}>（6文字以上）</span>}
-              </label>
-              {mode === 'login' && (
-                <button
-                  type="button"
-                  style={styles.forgotLink}
-                  onClick={() => switchMode('reset')}
-                >
-                  パスワードをお忘れの方
-                </button>
-              )}
+              <label style={styles.label}>パスワード</label>
+              <button
+                type="button"
+                style={styles.forgotLink}
+                onClick={() => switchMode('reset')}
+              >
+                パスワードをお忘れの方
+              </button>
             </div>
             <input
               type="password"
@@ -197,23 +165,10 @@ export default function LoginPage() {
             disabled={loading}
             style={styles.submitBtn}
           >
-            {loading ? '処理中...' : mode === 'login' ? 'ログイン' : 'アカウントを作成'}
+            {loading ? '処理中...' : 'ログイン'}
           </button>
         </form>
 
-        <div style={styles.switchRow}>
-          {mode === 'login' ? (
-            <>
-              <span style={{ color: 'var(--text-muted)' }}>アカウントをお持ちでない方は</span>
-              <button style={styles.linkBtn} onClick={() => switchMode('signup')}>新規登録</button>
-            </>
-          ) : (
-            <>
-              <span style={{ color: 'var(--text-muted)' }}>すでにアカウントをお持ちの方は</span>
-              <button style={styles.linkBtn} onClick={() => switchMode('login')}>ログイン</button>
-            </>
-          )}
-        </div>
 
         <div style={styles.footer}>
           <button style={styles.footerLink} onClick={() => setShowPrivacy(true)}>
