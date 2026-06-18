@@ -1,0 +1,209 @@
+import { supabase } from './supabase'
+
+function calcAgeGroup(birthdate) {
+  if (!birthdate) return null
+  const today = new Date()
+  const birth = new Date(birthdate)
+  let age = today.getFullYear() - birth.getFullYear()
+  const md = today.getMonth() - birth.getMonth()
+  if (md < 0 || (md === 0 && today.getDate() < birth.getDate())) age--
+  if (age < 0 || age > 120) return null
+  if (age < 10) return '10歳未満'
+  if (age >= 70) return '70代以上'
+  return `${Math.floor(age / 10) * 10}代`
+}
+
+const toAppAppointment = r => ({
+  id: r.id, publicId: r.public_id, customerId: r.customer_id,
+  staffId: r.staff_id, menuId: r.menu_id, date: r.date,
+  time: r.time, duration: r.duration, notes: r.notes, status: r.status,
+})
+
+const toDbAppointment = a => ({
+  customer_id: a.customerId, staff_id: a.staffId, menu_id: a.menuId,
+  date: a.date, time: a.time, duration: a.duration, notes: a.notes, status: a.status,
+})
+
+const toAppCustomer = r => ({
+  id: r.id, name: r.name, phone: r.phone, email: r.email,
+  notes: r.notes, visitCount: r.visit_count,
+  birthdate: r.birthdate ?? null, ageGroup: r.age_group ?? null,
+})
+
+const toDbCustomer = c => ({
+  name: c.name, phone: c.phone, email: c.email, notes: c.notes,
+  visit_count: c.visitCount, birthdate: c.birthdate || null,
+  age_group: c.birthdate ? calcAgeGroup(c.birthdate) : null,
+})
+
+export async function fetchStaff() {
+  const { data, error } = await supabase.from('staff').select('*').order('id')
+  if (error) throw error
+  return data
+}
+
+export async function upsertStaff(staff) {
+  const row = { name: staff.name, role: staff.role, color: staff.color }
+  if (staff.id) {
+    const { data, error } = await supabase.from('staff').update(row).eq('id', staff.id).select().single()
+    if (error) throw error
+    return data
+  } else {
+    const { data, error } = await supabase.from('staff').insert(row).select().single()
+    if (error) throw error
+    return data
+  }
+}
+
+export async function deleteStaff(id) {
+  const { error } = await supabase.from('staff').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function fetchMenus() {
+  const { data, error } = await supabase.from('menus').select('*').order('id')
+  if (error) throw error
+  return data
+}
+
+export async function upsertMenu(menu) {
+  const row = { name: menu.name, price: menu.price, duration: menu.duration, category: menu.category }
+  if (menu.id) {
+    const { data, error } = await supabase.from('menus').update(row).eq('id', menu.id).select().single()
+    if (error) throw error
+    return data
+  } else {
+    const { data, error } = await supabase.from('menus').insert(row).select().single()
+    if (error) throw error
+    return data
+  }
+}
+
+export async function deleteMenu(id) {
+  const { error } = await supabase.from('menus').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function fetchCustomers() {
+  const { data, error } = await supabase.from('customers').select('*').order('id')
+  if (error) throw error
+  return data.map(toAppCustomer)
+}
+
+export async function upsertCustomer(customer) {
+  const row = toDbCustomer(customer)
+  if (customer.id) {
+    const { data, error } = await supabase.from('customers').update(row).eq('id', customer.id).select().single()
+    if (error) throw error
+    return toAppCustomer(data)
+  } else {
+    const { data, error } = await supabase.from('customers').insert(row).select().single()
+    if (error) throw error
+    return toAppCustomer(data)
+  }
+}
+
+export async function deleteCustomer(id) {
+  const { error } = await supabase.from('customers').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function fetchAppointments() {
+  const { data, error } = await supabase.from('appointments').select('*').order('date').order('time')
+  if (error) throw error
+  return data.map(toAppAppointment)
+}
+
+export async function upsertAppointment(appointment) {
+  const row = toDbAppointment(appointment)
+  if (appointment.id) {
+    const { data, error } = await supabase.from('appointments').update(row).eq('id', appointment.id).select().single()
+    if (error) throw error
+    return toAppAppointment(data)
+  } else {
+    const { data, error } = await supabase.from('appointments').insert(row).select().single()
+    if (error) throw error
+    return toAppAppointment(data)
+  }
+}
+
+export async function deleteAppointment(id) {
+  const { error } = await supabase.from('appointments').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function fetchBlockedDates() {
+  const { data, error } = await supabase.from('blocked_dates').select('*').order('date')
+  if (error) throw error
+  return data
+}
+
+export async function addBlockedDate(date, startTime = null, endTime = null, reason = '') {
+  const { data, error } = await supabase
+    .from('blocked_dates').insert({ date, time: startTime || null, end_time: endTime || null, reason: reason || null }).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function removeBlockedDate(id) {
+  const { error } = await supabase.from('blocked_dates').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function fetchWeeklyBlocks() {
+  const { data, error } = await supabase
+    .from('weekly_blocks').select('*').order('day_of_week').order('start_time')
+  if (error) throw error
+  return data
+}
+
+export async function addWeeklyBlock(dayOfWeek, startTime, endTime, reason, weekOfMonth = null) {
+  const { data, error } = await supabase
+    .from('weekly_blocks')
+    .insert({ day_of_week: dayOfWeek, start_time: startTime || null, end_time: endTime || null, reason: reason || null, week_of_month: weekOfMonth || null })
+    .select().single()
+  if (error) throw error
+  return data
+}
+
+export async function removeWeeklyBlock(id) {
+  const { error } = await supabase.from('weekly_blocks').delete().eq('id', id)
+  if (error) throw error
+}
+
+// ==================== ADMIN PREVIEW ====================
+export async function adminFetchStaff(salonId) {
+  const { data, error } = await supabase.rpc('admin_get_staff', { p_salon_id: salonId })
+  if (error) throw error
+  return data
+}
+
+export async function adminFetchMenus(salonId) {
+  const { data, error } = await supabase.rpc('admin_get_menus', { p_salon_id: salonId })
+  if (error) throw error
+  return data
+}
+
+export async function adminFetchCustomers(salonId) {
+  const { data, error } = await supabase.rpc('admin_get_customers', { p_salon_id: salonId })
+  if (error) throw error
+  return data.map(toAppCustomer)
+}
+
+export async function adminFetchAppointments(salonId) {
+  const { data, error } = await supabase.rpc('admin_get_appointments', { p_salon_id: salonId })
+  if (error) throw error
+  return data.map(toAppAppointment)
+}
+
+export async function adminFetchBlockedDates(salonId) {
+  const { data, error } = await supabase.rpc('admin_get_blocked_dates', { p_salon_id: salonId })
+  if (error) throw error
+  return data
+}
+
+export async function adminFetchWeeklyBlocks(salonId) {
+  const { data, error } = await supabase.rpc('admin_get_weekly_blocks', { p_salon_id: salonId })
+  if (error) throw error
+  return data
+}
